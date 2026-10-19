@@ -78,6 +78,15 @@ node bridge/install.mjs "D:\TwilightEcho"
 
 ### 构建 .tep
 
+官方推荐使用 Twilight Echo 的 `create-twilight-plugin pack`：
+
+```powershell
+git clone --branch Pxasen https://github.com/Px-asen/Twilight_Echo.git ..\Twilight_Echo
+node ..\Twilight_Echo\packages\create-twilight-plugin\bin\create-twilight-plugin.cjs pack . --out dist
+```
+
+本地备用脚本：
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tep.ps1
 ```
@@ -89,6 +98,10 @@ dist/com.twilightecho.tool.wallpaper-engine-<version>.tep
 ```
 
 `.tep` 内含插件本体、`patch/we-background.js` 和 [`docs/TE-PATCH.md`](docs/TE-PATCH.md)。
+
+发布到 GitHub、Release 和社区插件市场：
+
+- [`docs/PUBLISHING.md`](docs/PUBLISHING.md)
 
 ## 本体接入
 

@@ -11,13 +11,23 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build .tep
-        shell: pwsh
-        run: ./scripts/build-tep.ps1
+      - uses: actions/checkout@v4
+        with:
+          repository: Px-asen/Twilight_Echo
+          ref: Pxasen
+          path: .twilight-echo
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pack with the official Twilight Echo CLI
+        run: |
+          node .twilight-echo/packages/create-twilight-plugin/bin/create-twilight-plugin.cjs pack . --out dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
