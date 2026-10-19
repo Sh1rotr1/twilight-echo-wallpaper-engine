@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules/
+dist/
+*.tep
+*.zip
+
+# Local application backups / caches
+*.te-we-backup
+app.asar.unpacked/
+
+# Temporary test files
+_*
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

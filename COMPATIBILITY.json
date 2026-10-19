@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "plugin": {
+    "id": "com.twilightecho.tool.wallpaper-engine",
+    "version": "2.1.0",
+    "apiVersion": 3,
+    "engines": ">=1.2.0",
+    "permissions": ["filesystem:read", "settings", "ui:inject"]
+  },
+  "host": {
+    "name": "TwilightEcho",
+    "tested": ["1.3.1"],
+    "notes": {
+      "1.3.1": "CSP frame-src 为 'self' plugin-ui:；安装器按指令名追加 127.0.0.1:3100。"
+    }
+  },
+  "paths": {
+    "appDir": "D:\\TwilightEcho",
+    "asar": "resources/app.asar",
+    "backup": "resources/app.asar.te-we-backup",
+    "rendererIndex": "out/renderer/index.html",
+    "rendererBridge": "out/renderer/we-background.js",
+    "main": "out/main/index.js",
+    "pluginInstall": "%APPDATA%/TwilightEcho/plugins/com.twilightecho.tool.wallpaper-engine/<version>/",
+    "pluginData": "%APPDATA%/TwilightEcho/plugin-data/com.twilightecho.tool.wallpaper-engine/"
+  },
+  "csp": {
+    "origin": "http://127.0.0.1:3100",
+    "directives": ["frame-src", "img-src", "media-src"],
+    "match": "按指令名正则匹配，不写死旧尾项"
+  },
+  "patchPoints": [
+    "out/renderer/index.html: add ./we-background.js script and meta CSP origin",
+    "out/main/index.js: append origin to frame-src/img-src/media-src response CSP",
+    "out/renderer/we-background.js: copied from bridge/we-background.js",
+    "resources/app.asar.te-we-backup: refresh with the current official asar"
+  ],
+  "runtime": {
+    "server": "127.0.0.1:3100",
+    "bridgeLayer": "#te-we-bg",
+    "appLayerZ": 1,
+    "bridgeLayerZ": 0,
+    "statePollMs": 2000,
+    "layoutDebounceMs": 120
+  },
+  "routes": [
+    "GET /api/state",
+    "GET /api/wallpapers",
+    "POST /api/apply",
+    "POST /api/layout",
+    "POST /api/control",
+    "GET /api/props/<id>",
+    "POST /api/props",
+    "POST /api/props/reset",
+    "GET /media/<id>",
+    "GET /preview/<id>",
+    "GET /web/<id>/*",
+    "GET /web/*",
+    "GET /scene-files/<id>/*",
+    "GET /scene-live/*",
+    "GET /diag"
+  ],
+  "stateFields": [
+    "selected", "rev", "q", "extraDir", "autoApply", "lastProject", "lastTitle",
+    "scrim", "fit", "quality", "paused", "interactive",
+    "offsetX", "offsetY", "offsetZ", "zoom", "userProps"
+  ],
+  "scene": {
+    "engine": "webwallgl@3.x",
+    "adapter": "lib/webwallgl/index.html + renderer.js",
+    "url": "/scene-live/index.html?type=scene&src=<id>&mediaBase=/scene-files&fit=cover&sceneFps=30|60&muted=true&renderDpr=1",
+    "source": "/scene-files/<id>/"
+  },
+  "properties": {
+    "source": "project.json general.properties",
+    "parser": "lib/we-props.js（DSH 同款语义）",
+    "cache": "插件设置 userProps，按壁纸 ID 存覆盖值",
+    "api": ["GET /api/props/<id>", "POST /api/props", "POST /api/props/reset"],
+    "live": "postMessage te-prop → inst.setProperties / applyUserProperties"
+  },
+  "checks": [
+    "appVersion matches tested or needs review",
+    "index contains we-background.js",
+    "index CSP contains 127.0.0.1:3100",
+    "main frame/img/media CSP contains 127.0.0.1:3100",
+    "SettingsPage assets contain 背景与材质",
+    "CSS contains .app-background-layer/.settings-overlay-root/te-settings-surface",
+    "backup exists and matches current official version"
+  ]
+}

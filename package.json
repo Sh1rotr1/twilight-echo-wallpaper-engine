@@ -1,0 +1,12 @@
+{
+  "name": "twilight-echo-wallpaper-engine",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wallpaper Engine background plugin for Twilight Echo",
+  "license": "MIT",
+  "scripts": {
+    "build:tep": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-tep.ps1",
+    "check": "node scripts/check-compat.mjs"
+  }
+}
