@@ -25,9 +25,18 @@ jobs:
         with:
           node-version: 22
 
+      - name: Stage plugin without the Twilight Echo checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/plugin-stage"
+          tar \
+            --exclude='./.twilight-echo' \
+            --exclude='./.git' \
+            --exclude='./dist' \
+            -cf - . | tar -xf - -C "$RUNNER_TEMP/plugin-stage"
+
       - name: Pack with the official Twilight Echo CLI
         run: |
-          node .twilight-echo/packages/create-twilight-plugin/bin/create-twilight-plugin.cjs pack . --out dist
+          node .twilight-echo/packages/create-twilight-plugin/bin/create-twilight-plugin.cjs pack "$RUNNER_TEMP/plugin-stage" --out dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -42,3 +51,4 @@ jobs:
         with:
           files: dist/*.tep
           generate_release_notes: true
+          overwrite_files: true
