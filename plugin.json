@@ -9,6 +9,6 @@
   "main": "index.mjs",
   "engines": { "twilightEcho": ">=1.2.0" },
   "apiVersion": 3,
-  "permissions": ["filesystem:read", "filesystem:write", "settings", "ui:inject"]
-  "repository": "https://github.com/Sh1rotr1/twilight-echo-wallpaper-engine",
+  "permissions": ["filesystem:read", "filesystem:write", "settings", "ui:inject"],
+  "repository": "https://github.com/Sh1rotr1/twilight-echo-wallpaper-engine"
 }
