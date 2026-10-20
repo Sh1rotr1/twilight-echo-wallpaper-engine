@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.1.1
+## 1.0.1
 
 - 迷你播放器支持动态壁纸：
   - 检测 `?window=mini-player`
@@ -13,7 +13,7 @@
   - 开关状态写入插件设置 `miniCover`
   - 迷你窗口轮询 `/api/state` 后立即恢复/移除背景层
 
-## 2.1.0
+## 1.0.0
 
 - Web 壁纸兼容 Spine / WebGL 画布与项目根相对路径：
   - `/web/assets/...` 等由页面 `../assets/...` 解析出的路径映射回当前 web 项目根
