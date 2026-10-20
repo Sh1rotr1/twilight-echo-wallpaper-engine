@@ -32,6 +32,7 @@ const DEFAULT_STATE = {
   userProps: {},
   sceneVideo: '',
   sceneRuntime: '',
+  miniCover: true,
   paused: false
 }
 
@@ -428,6 +429,7 @@ function bridgeState() {
     offsetY: Number(state.offsetY) || 0,
     offsetZ: Number(state.offsetZ) || 0,
     zoom: Number(state.zoom) || 100,
+    miniCover: state.miniCover !== false,
     scene: item.type === 'scene'
   }
   if (item.type === 'video') payload.url = `/media/${item.id}`
@@ -489,7 +491,7 @@ function handleRequest(req, res) {
   if (pathname === '/api/wallpapers') {
     const items = scanWallpapers()
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-    res.end(JSON.stringify({ total: items.length, selected: state.selected, state: { fit: state.fit, scrim: state.scrim, quality: state.quality, paused: state.paused }, items: items.slice(0, 500).map((item) => ({ id: item.id, title: item.title, type: item.type, hasWidgets: item.hasProps === true })) }))
+    res.end(JSON.stringify({ total: items.length, selected: state.selected, state: { fit: state.fit, scrim: state.scrim, quality: state.quality, paused: state.paused, miniCover: state.miniCover !== false }, items: items.slice(0, 500).map((item) => ({ id: item.id, title: item.title, type: item.type, hasWidgets: item.hasProps === true })) }))
     return
   }
   const propsGet = /^\/api\/props\/([a-f0-9]{16})$/.exec(pathname)
@@ -579,6 +581,9 @@ function handleRequest(req, res) {
             const item = findWallpaper(state.selected)
             if (item?.type !== 'web') throw new Error('仅网页壁纸支持交互')
             state.interactive = !state.interactive
+          }
+          else if (action === 'mini-cover') {
+            state.miniCover = payload.value !== false
           }
           else throw new Error('未知操作')
           state.rev = (Number(state.rev) || 0) + 1

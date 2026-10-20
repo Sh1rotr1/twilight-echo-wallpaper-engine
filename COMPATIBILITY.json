@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "plugin": {
     "id": "com.twilightecho.tool.wallpaper-engine",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "apiVersion": 3,
     "engines": ">=1.2.0",
-    "permissions": ["filesystem:read", "settings", "ui:inject"]
+    "permissions": ["filesystem:read", "filesystem:write", "settings", "ui:inject"]
   },
   "host": {
     "name": "TwilightEcho",
@@ -63,7 +63,7 @@
   "stateFields": [
     "selected", "rev", "q", "extraDir", "autoApply", "lastProject", "lastTitle",
     "scrim", "fit", "quality", "paused", "interactive",
-    "offsetX", "offsetY", "offsetZ", "zoom", "userProps"
+    "offsetX", "offsetY", "offsetZ", "zoom", "userProps", "miniCover"
   ],
   "scene": {
     "engine": "webwallgl@3.x",

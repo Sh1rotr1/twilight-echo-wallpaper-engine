@@ -15,7 +15,7 @@
 - 位置 X / Y / Z、缩放实时生效
 - 视频和网页自动静音
 - 网页壁纸可进入交互模式
-- 迷你播放器：动态壁纸位于 `.mini-player-root` 内层，保留圆角窗口和播放器控件；迷你窗口自动降画质、关闭网页交互
+- 迷你播放器：动态壁纸位于 `.mini-player-root` 内层，保留圆角窗口和播放器控件；外观页可开关“使用当前壁纸覆盖迷你播放器背景”，迷你窗口自动降画质、关闭网页交互
 - 读取 `project.json` 的壁纸属性，生成开关 / 滑杆 / 颜色 / 下拉 / 文件控件
 - 属性修改实时作用于当前壁纸，覆盖值按壁纸保存，可恢复默认
 - 兼容 Spine / WebGL 网页壁纸的 `../assets` 项目根路径
@@ -47,7 +47,7 @@
 2. 在插件管理中安装：
 
 ```text
-dist/com.twilightecho.tool.wallpaper-engine-2.1.0.tep
+dist/com.twilightecho.tool.wallpaper-engine-2.1.1.tep
 ```
 
 3. 重启 Twilight Echo

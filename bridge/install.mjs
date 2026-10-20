@@ -20,10 +20,10 @@ import { fileURLToPath } from 'node:url'
 const APP_DIR = path.resolve(process.argv[2] || 'D:\\TwilightEcho')
 const ASAR_PATH = path.join(APP_DIR, 'resources', 'app.asar')
 const PLUGIN_ID = 'com.twilightecho.tool.wallpaper-engine'
-const PLUGIN_VERSION = '2.1.0'
-const PORT = 3100
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PLUGIN_SRC = path.resolve(HERE, '..')
+const PLUGIN_VERSION = JSON.parse(fs.readFileSync(path.join(PLUGIN_SRC, 'plugin.json'), 'utf8')).version
+const PORT = 3100
 
 function fail(message) {
   console.error(`\n[install] ${message}\n`)

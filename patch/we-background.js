@@ -382,6 +382,10 @@
       cleanup()
       return
     }
+    if (MINI && state.miniCover === false) {
+      cleanup()
+      return
+    }
     lastActive = true
     document.documentElement.setAttribute('data-te-we-bg', 'on')
     var el = ensureLayer()
@@ -524,6 +528,12 @@
       '<option value="720">720P</option>',
       '</select></div>',
       '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(127,127,127,.15)">',
+      '<div style="width:110px;flex:none">迷你播放器</div>',
+      '<label style="flex:1;display:flex;align-items:center;gap:8px;cursor:pointer">',
+      '<input id="te-we-mini-cover" type="checkbox">',
+      '<span>使用当前壁纸覆盖迷你播放器背景</span>',
+      '</label></div>',
+      '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(127,127,127,.15)">',
       '<div style="width:110px;flex:none">填充 / 暗化</div>',
       '<div style="flex:1;display:flex;gap:6px">',
       '<select id="te-we-picker-fit" style="flex:1;padding:5px 7px;border-radius:8px;border:1px solid rgba(127,127,127,.35);background:rgba(127,127,127,.10);color:inherit;font:inherit">',
@@ -560,6 +570,7 @@
     var quality = card.querySelector('#te-we-picker-quality')
     var fit = card.querySelector('#te-we-picker-fit')
     var scrim = card.querySelector('#te-we-picker-scrim')
+    var miniCover = card.querySelector('#te-we-mini-cover')
     var status = card.querySelector('#te-we-picker-status')
     var pause = card.querySelector('#te-we-picker-pause')
     var xInput = card.querySelector('#te-we-x')
@@ -595,6 +606,7 @@
           if (data.state.fit) fit.value = data.state.fit
           if (data.state.scrim != null) scrim.value = String(data.state.scrim)
           if (data.state.quality) quality.value = data.state.quality
+          if (data.state.miniCover != null) miniCover.checked = data.state.miniCover !== false
           if (data.state.offsetX != null) xInput.value = String(data.state.offsetX)
           if (data.state.offsetY != null) yInput.value = String(data.state.offsetY)
           if (data.state.offsetZ != null) zInput.value = String(data.state.offsetZ)
@@ -607,6 +619,9 @@
       .catch(function () { status.textContent = '读取壁纸列表失败' })
 
     filter.addEventListener('input', renderOptions)
+    miniCover.addEventListener('change', function () {
+      request('/api/control', { action: 'mini-cover', value: miniCover.checked }).catch(function () {})
+    })
 
     var layoutTimer = 0
     function pushLayout() {

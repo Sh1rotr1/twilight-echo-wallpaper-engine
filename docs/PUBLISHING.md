@@ -54,7 +54,7 @@ node ..\Twilight_Echo\packages\create-twilight-plugin\bin\create-twilight-plugin
 Output:
 
 ```text
-dist/com.twilightecho.tool.wallpaper-engine-2.1.0.tep
+dist/com.twilightecho.tool.wallpaper-engine-2.1.1.tep
 ```
 
 The official packer validates `plugin.json`, requires a JS `main`, and excludes `node_modules`, `.git`, and `dist`.
@@ -64,14 +64,14 @@ The official packer validates `plugin.json`, requires a JS `main`, and excludes 
 Create a GitHub Release:
 
 ```text
-Tag: v2.1.0
-Title: v2.1.0
+Tag: v2.1.1
+Title: v2.1.1
 ```
 
 Attach exactly one file:
 
 ```text
-com.twilightecho.tool.wallpaper-engine-2.1.0.tep
+com.twilightecho.tool.wallpaper-engine-2.1.1.tep
 ```
 
 Do not attach several `.tep` files.

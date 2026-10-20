@@ -185,6 +185,7 @@ index.html?window=mini-player
 - 禁用网页交互模式
 - 画质最高 720P，场景 30fps
 - 主题/布局重建 `.mini-player-root` 时，MutationObserver 会把图层重新挂回
+- 外观页开关 `miniCover` 控制是否覆盖迷你窗口；关闭后迷你窗口恢复自己的主题背景
 
 ## 11. 壁纸属性（WE 用户属性）
 
