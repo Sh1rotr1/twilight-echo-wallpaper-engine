@@ -11,7 +11,9 @@
   var API = 'http://127.0.0.1:3100'
   var STYLE_ID = 'te-we-bg-style'
   var POLL_MS = 2000
-  var MINI = new URLSearchParams(location.search).get('window') === 'mini-player'
+  var WINDOW_KIND = new URLSearchParams(location.search).get('window') || 'main'
+  if (WINDOW_KIND !== 'main' && WINDOW_KIND !== 'mini-player') return
+  var MINI = WINDOW_KIND === 'mini-player'
 
   if (window.__TE_WE_BG__) return
   window.__TE_WE_BG__ = true

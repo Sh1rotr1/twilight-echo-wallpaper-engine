@@ -2,6 +2,9 @@
 
 ## 1.0.1
 
+- 修复动态壁纸覆盖桌面歌词背景的问题
+  - 渲染桥只在主窗口和 `?window=mini-player` 中运行
+  - `desktop-lyrics`、`dynamic-island`、`tray-player` 窗口直接跳过
 - 迷你播放器支持动态壁纸：
   - 检测 `?window=mini-player`
   - 背景层插入 `.mini-player-root`，自动继承圆角和 `overflow: hidden`
