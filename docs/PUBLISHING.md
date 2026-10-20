@@ -54,7 +54,7 @@ node ..\Twilight_Echo\packages\create-twilight-plugin\bin\create-twilight-plugin
 Output:
 
 ```text
-dist/com.twilightecho.tool.wallpaper-engine-1.0.1.tep
+dist/com.twilightecho.tool.wallpaper-engine-1.0.2.tep
 ```
 
 The official packer validates `plugin.json`, requires a JS `main`, and excludes `node_modules`, `.git`, and `dist`.
@@ -64,14 +64,14 @@ The official packer validates `plugin.json`, requires a JS `main`, and excludes 
 Create a GitHub Release:
 
 ```text
-Tag: v1.0.1
-Title: 1.0.1
+Tag: v1.0.2
+Title: 1.0.2
 ```
 
 The release body is read from:
 
 ```text
-docs/releases/v1.0.1.md
+docs/releases/v1.0.2.md
 ```
 
 Write the actual update content there before tagging. Do not rely on auto-generated "Full Changelog" text.
@@ -79,7 +79,7 @@ Write the actual update content there before tagging. Do not rely on auto-genera
 Attach exactly one file:
 
 ```text
-com.twilightecho.tool.wallpaper-engine-1.0.1.tep
+com.twilightecho.tool.wallpaper-engine-1.0.2.tep
 ```
 
 Do not attach several `.tep` files.

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "plugin": {
     "id": "com.twilightecho.tool.wallpaper-engine",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "apiVersion": 3,
     "engines": ">=1.2.0",
     "permissions": ["filesystem:read", "filesystem:write", "settings", "ui:inject"]

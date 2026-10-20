@@ -299,6 +299,32 @@
     }
   }
 
+  function layoutSceneFrame() {
+    if (!media || !layer || media.tagName !== 'IFRAME' || !current.scene) return
+    if (current.fit === 'cover') {
+      var width = layer.clientWidth || window.innerWidth || 1
+      var height = layer.clientHeight || window.innerHeight || 1
+      var aspect = 16 / 9
+      var frameWidth = width
+      var frameHeight = height
+      if (width / height > aspect) frameHeight = width / aspect
+      else frameWidth = height * aspect
+      media.style.width = frameWidth + 'px'
+      media.style.height = frameHeight + 'px'
+      media.style.left = ((width - frameWidth) / 2) + 'px'
+      media.style.top = ((height - frameHeight) / 2) + 'px'
+      media.style.right = 'auto'
+      media.style.bottom = 'auto'
+    } else {
+      media.style.width = '100%'
+      media.style.height = '100%'
+      media.style.left = '0'
+      media.style.top = '0'
+      media.style.right = ''
+      media.style.bottom = ''
+    }
+  }
+
   function applyLayout(state) {
     current.fit = state.fit === 'contain' || state.fit === 'fill' ? state.fit : 'cover'
     current.scrim = Math.max(0, Math.min(80, Number(state.scrim) || 0))
@@ -309,8 +335,14 @@
     if (media) {
       media.style.objectFit = current.fit
       media.style.transformOrigin = 'center center'
-      media.style.willChange = 'transform'
-      media.style.transform = 'translate3d(' + offsetX + '%, ' + offsetY + '%, ' + offsetZ + 'px) scale(' + zoom + ')'
+      if (offsetX !== 0 || offsetY !== 0 || offsetZ !== 0 || zoom !== 1) {
+        media.style.willChange = 'transform'
+        media.style.transform = 'translate3d(' + offsetX + '%, ' + offsetY + '%, ' + offsetZ + 'px) scale(' + zoom + ')'
+      } else {
+        media.style.willChange = 'auto'
+        media.style.transform = ''
+      }
+      layoutSceneFrame()
     }
     if (scrim) scrim.style.setProperty('--te-we-scrim', String(current.scrim / 100))
   }
@@ -423,6 +455,8 @@
     }
     var signature = [state.type || '', sourceUrl, state.preview || '', quality].join('|')
     current.preview = state.preview || ''
+    current.scene = state.scene === true
+    current.url = sourceUrl
 
     if (signature !== current.signature) {
       current.signature = signature
@@ -470,6 +504,14 @@
       window.setTimeout(poll, POLL_MS)
     }
   }
+
+  // Scene wallpapers use a 16:9 render surface inside the host layer. On
+  // resize, resize that surface immediately; the parent layer clips it to
+  // the window, which is what makes cover-cropping keep the whole scene.
+  window.addEventListener('resize', function () {
+    if (!current.scene || !media || media.tagName !== 'IFRAME') return
+    layoutSceneFrame()
+  })
 
   function boot() {
     beacon('/api/bridge-boot')
