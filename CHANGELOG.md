@@ -2,6 +2,11 @@
 
 ## 2.1.0
 
+- 迷你播放器背景：
+  - 检测 `?window=mini-player`
+  - 背景层插入 `.mini-player-root`，自动继承圆角和 `overflow: hidden`
+  - 隐藏迷你播放器自带的纯色/封面/渐变背景
+  - 迷你窗口最高 720P、场景 30fps，并禁用网页交互
 - Web 壁纸兼容 Spine / WebGL 画布与项目根相对路径：
   - `/web/assets/...` 等由页面 `../assets/...` 解析出的路径映射回当前 web 项目根
   - 适配 `[碧蓝档案 | Blue Archive]对策委员会BD特典 All in One 可交互 画质增强` 这类 Web 壁纸

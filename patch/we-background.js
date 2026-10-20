@@ -11,9 +11,11 @@
   var API = 'http://127.0.0.1:3100'
   var STYLE_ID = 'te-we-bg-style'
   var POLL_MS = 2000
+  var MINI = new URLSearchParams(location.search).get('window') === 'mini-player'
 
   if (window.__TE_WE_BG__) return
   window.__TE_WE_BG__ = true
+  if (MINI) document.documentElement.setAttribute('data-te-window', 'mini-player')
 
   var layer = null
   var media = null
@@ -186,6 +188,23 @@
     '  inset: 0;',
     '  background: rgba(0, 0, 0, var(--te-we-scrim, 0));',
     '  pointer-events: none;',
+    '}',
+    'html[data-te-window="mini-player"] .mini-player-root {',
+    '  background: transparent !important;',
+    '}',
+    'html[data-te-window="mini-player"] #te-we-bg.te-we-mini-bg {',
+    '  position: absolute !important;',
+    '  inset: 0 !important;',
+    '  z-index: 0 !important;',
+    '}',
+    'html[data-te-window="mini-player"]:has(#te-we-bg.te-we-visible)',
+    '  .mini-player-root:not(.is-customizing) :is(',
+    '    .mini-window-fill,',
+    '    .mini-background-source,',
+    '    .mini-background-overlay,',
+    '    .mini-grain',
+    '  ) {',
+    '  display: none !important;',
     '}'
   ].join('\n')
 
@@ -197,12 +216,46 @@
     ;(document.head || document.documentElement).appendChild(style)
   }
 
+  function miniRoot() {
+    return MINI ? document.querySelector('.mini-player-root') : null
+  }
+
+  function attachMiniLayer(el) {
+    if (!MINI || !el) return false
+    var root = miniRoot()
+    if (!root) return false
+    if (el.parentNode !== root) root.insertBefore(el, root.firstChild)
+    el.classList.add('te-we-mini-bg')
+    return true
+  }
+
+  var miniObserver = null
+  var miniAttachQueued = false
+
+  function watchMiniRoot() {
+    if (!MINI || miniObserver || !document.documentElement) return
+    miniObserver = new MutationObserver(function () {
+      if (!layer || miniAttachQueued) return
+      miniAttachQueued = true
+      requestAnimationFrame(function () {
+        miniAttachQueued = false
+        if (layer) attachMiniLayer(layer)
+      })
+    })
+    miniObserver.observe(document.documentElement, { childList: true, subtree: true })
+  }
+
   function ensureLayer() {
-    if (layer && document.documentElement.contains(layer)) return layer
+    if (layer) {
+      if (attachMiniLayer(layer)) return layer
+      if (document.documentElement.contains(layer)) return layer
+    }
     if (!document.body) return null
     layer = document.createElement('div')
     layer.id = 'te-we-bg'
-    document.body.insertBefore(layer, document.body.firstChild)
+    if (MINI) layer.classList.add('te-we-mini-bg')
+    if (!attachMiniLayer(layer)) document.body.insertBefore(layer, document.body.firstChild)
+    watchMiniRoot()
     return layer
   }
 
@@ -334,7 +387,7 @@
     var el = ensureLayer()
     if (!el) return
 
-    var interactive = state.type === 'web' && state.interactive === true
+    var interactive = !MINI && state.type === 'web' && state.interactive === true
     el.classList.toggle('te-we-interactive', interactive)
     var exit = document.getElementById('te-we-exit')
     if (interactive && !exit) {
@@ -355,17 +408,24 @@
 
     var fit = state.fit === 'contain' || state.fit === 'fill' ? state.fit : 'cover'
     var quality = state.quality === '1080' || state.quality === '720' ? state.quality : 'original'
-    var signature = [state.type || '', state.url || '', state.preview || '', quality].join('|')
+    var sourceUrl = state.url || ''
+    if (MINI) {
+      if (quality === 'original') quality = '720'
+      if (state.scene) {
+        sourceUrl = sourceUrl.replace('sceneFps=60', 'sceneFps=30').replace('renderDpr=1', 'renderDpr=0.75')
+      }
+    }
+    var signature = [state.type || '', sourceUrl, state.preview || '', quality].join('|')
     current.preview = state.preview || ''
 
     if (signature !== current.signature) {
       current.signature = signature
       clearMedia()
-      if (state.url && (state.type === 'video' || state.type === 'scene')) {
-        media = makeVideo(state.url, fit, quality)
-      } else if (state.url && state.type === 'web') {
+      if (sourceUrl && (state.type === 'video' || state.type === 'scene')) {
+        media = makeVideo(sourceUrl, fit, quality)
+      } else if (sourceUrl && state.type === 'web') {
         media = document.createElement('iframe')
-        media.src = API + state.url
+        media.src = API + sourceUrl
         if (!state.scene) media.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-pointer-lock')
         media.setAttribute('allow', 'autoplay; encrypted-media; fullscreen')
         media.style.border = '0'

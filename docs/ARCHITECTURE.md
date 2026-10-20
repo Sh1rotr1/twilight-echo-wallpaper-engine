@@ -169,7 +169,24 @@ translate3d(X%, Y%, Zpx) scale(zoom)
   cache\
 ```
 
-## 9. 壁纸属性（WE 用户属性）
+## 10. 迷你播放器
+
+迷你播放器是独立窗口：
+
+```text
+index.html?window=mini-player
+```
+
+桥检测该 query 后：
+
+- 把 `#te-we-bg` 插入 `.mini-player-root`，使用 `position:absolute`，继承圆角和 `overflow:hidden`
+- 只在图层可见后隐藏 `.mini-window-fill` / `.mini-background-source` / `.mini-background-overlay` / `.mini-grain`
+- 迷你窗口保持 `.mini-player-surface` 和所有控件
+- 禁用网页交互模式
+- 画质最高 720P，场景 30fps
+- 主题/布局重建 `.mini-player-root` 时，MutationObserver 会把图层重新挂回
+
+## 11. 壁纸属性（WE 用户属性）
 
 - 来源：`project.json` 的 `general.properties`
 - 解析：`lib/we-props.js`（order 浮点、combo 保留类型、localization、`editable:false`、file/directory 候选）
