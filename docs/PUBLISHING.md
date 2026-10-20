@@ -68,6 +68,14 @@ Tag: v2.1.1
 Title: v2.1.1
 ```
 
+The release body is read from:
+
+```text
+docs/releases/v2.1.1.md
+```
+
+Write the actual update content there before tagging. Do not rely on auto-generated "Full Changelog" text.
+
 Attach exactly one file:
 
 ```text
