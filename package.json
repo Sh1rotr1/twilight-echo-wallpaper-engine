@@ -1,6 +1,6 @@
 {
   "name": "twilight-echo-wallpaper-engine",
-  "version": "1.0.2",
+  "version": "2.1.1",
   "private": true,
   "type": "module",
   "description": "Wallpaper Engine background plugin for Twilight Echo",
