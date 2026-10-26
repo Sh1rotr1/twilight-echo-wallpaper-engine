@@ -1,6 +1,14 @@
 # 升级适配手册
 
-Twilight Echo 升级后，`resources/app.asar` 会被官方新包覆盖，桥和备份都要重做。按下面顺序处理。
+Twilight Echo 升级后，`resources/app.asar` 会被官方新包覆盖。1.3.x 需要重跑安装器；1.4.x 已内置渲染桥时，安装器会保留宿主桥，只更新插件并补齐备份。
+
+## 0. 1.4.x 变化
+
+- 应用已内置 `out/renderer/we-background.js`
+- 主进程 CSP 已包含 `WALLPAPER_ENGINE_ORIGIN`
+- 安装器检测到 `securitypolicyviolation` / `playbackStatus` 标记时，保留宿主桥
+- 缺少 `app.asar.te-we-backup` 时，安装器会先备份当前 `app.asar`
+- `check-compat.mjs` 会区分 `bridgeFresh` 与 `bridgeHostIntegrated`
 
 ## 1. 确认版本与文件
 

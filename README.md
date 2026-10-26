@@ -47,7 +47,7 @@
 2. 在插件管理中安装：
 
 ```text
-dist/com.twilightecho.tool.wallpaper-engine-2.1.1.tep
+dist/com.twilightecho.tool.wallpaper-engine-2.1.2.tep
 ```
 
 3. 重启 Twilight Echo
@@ -130,7 +130,7 @@ dist/com.twilightecho.tool.wallpaper-engine-<version>.tep
 
 当前开发与验证版本：
 
-- Twilight Echo `1.3.1`
+- Twilight Echo `1.3.1` / `1.4.0-perview`
 - Wallpaper Engine 创意工坊壁纸
 - Windows
 

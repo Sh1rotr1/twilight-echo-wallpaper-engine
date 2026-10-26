@@ -47,8 +47,20 @@ function readJson(archive, rel) {
 }
 
 function pickDirective(main, name) {
-  const values = [...String(main).matchAll(new RegExp(`"${name} ([^"]*)"`, 'g'))].map((m) => m[1])
-  return values.find((value) => value.includes("'self'")) || values[0] || null
+  const values = [...String(main).matchAll(new RegExp('(?:`|")' + name + ' ([^`"]*)', 'g'))].map((m) => m[1])
+  const preferred = values.filter((value) =>
+    value.includes('${WALLPAPER_ENGINE_ORIGIN}') ||
+    value.includes(ORIGIN)
+  )
+  return preferred[preferred.length - 1] || values.find((value) =>
+    value.includes('cover:') ||
+    value.includes('twilight-media:') ||
+    value.includes('plugin-ui:')
+  ) || values.find((value) => value.includes("'self'")) || values[0] || null
+}
+
+function directiveHasOrigin(value) {
+  return Boolean(value && (value.includes(ORIGIN) || value.includes('${WALLPAPER_ENGINE_ORIGIN}')))
 }
 
 const pkg = readJson(asarPath, 'package.json') || {}
@@ -59,14 +71,18 @@ const img = pickDirective(main, 'img-src')
 const media = pickDirective(main, 'media-src')
 
 const bridgeInstalled = index.includes('we-background.js')
+const bridgeText = read(asarPath, 'out/renderer/we-background.js') || ''
+const bridgeHostIntegrated = bridgeText.includes('securitypolicyviolation') && bridgeText.includes('playbackStatus')
+const bridgeFeaturesIntegrated = bridgeText.includes('te-we-mini-cover') && bridgeText.includes('data-te-lyric-invert')
+const bridgeFresh = bridgeHostIntegrated && bridgeFeaturesIntegrated
 const indexCsp = index.includes(ORIGIN)
 const csp = {
   frame,
   img,
   media,
-  frameOk: Boolean(frame && frame.includes(ORIGIN)),
-  imgOk: Boolean(img && img.includes(ORIGIN)),
-  mediaOk: Boolean(media && media.includes(ORIGIN))
+  frameOk: directiveHasOrigin(frame),
+  imgOk: directiveHasOrigin(img),
+  mediaOk: directiveHasOrigin(media)
 }
 
 let assets = []
@@ -108,6 +124,7 @@ try {
 const issues = []
 if (!pkg.version) issues.push('无法读取 app.asar/package.json 版本')
 if (!bridgeInstalled) issues.push('渲染桥未安装（升级后需要重跑 bridge/install.mjs）')
+else if (!bridgeFresh) issues.push('渲染桥版本过旧，需要重跑 bridge/install.mjs')
 if (!indexCsp) issues.push('index.html meta CSP 未放行 127.0.0.1:3100')
 if (!csp.frameOk) issues.push('main frame-src 未放行 127.0.0.1:3100')
 if (!csp.imgOk) issues.push('main img-src 未放行 127.0.0.1:3100')
@@ -131,13 +148,16 @@ console.log(JSON.stringify({
   tested,
   testedMatch,
   bridgeInstalled,
+  bridgeFresh,
+  bridgeHostIntegrated,
+  bridgeFeaturesIntegrated,
   indexCsp,
   csp,
   appearanceAnchor,
   cssHooks,
   backup: { exists: Boolean(backupVersion), version: backupVersion, matches: backupVersion === pkg.version },
   pluginInstalled,
-  needsInstall: !bridgeInstalled,
+  needsInstall: !bridgeInstalled || !bridgeFresh,
   issues,
   warnings
 }, null, 2))

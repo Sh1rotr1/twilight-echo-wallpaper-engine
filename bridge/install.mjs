@@ -149,7 +149,18 @@ async function main() {
   const renderer = path.join(unpacked, 'out', 'renderer')
   if (!fs.existsSync(renderer)) fail('app.asar 中找不到 out/renderer')
 
-  fs.copyFileSync(path.join(HERE, 'we-background.js'), path.join(renderer, 'we-background.js'))
+  const bridgePath = path.join(renderer, 'we-background.js')
+  const existingBridge = fs.existsSync(bridgePath) ? fs.readFileSync(bridgePath, 'utf8') : ''
+  const hostIntegratedBridge =
+    existingBridge.includes('securitypolicyviolation') &&
+    existingBridge.includes('playbackStatus') &&
+    existingBridge.includes('te-we-mini-cover') &&
+    existingBridge.includes('data-te-lyric-invert')
+  if (hostIntegratedBridge) {
+    console.log('[install] 检测到已适配的宿主渲染桥，保留')
+  } else {
+    fs.copyFileSync(path.join(HERE, 'we-background.js'), bridgePath)
+  }
 
   // The main process installs an authoritative CSP response header for the app
   // document. A meta tag alone is not enough: media/frame/img must be widened
@@ -157,11 +168,17 @@ async function main() {
   const mainPath = path.join(unpacked, 'out', 'main', 'index.js')
   let main = fs.readFileSync(mainPath, 'utf8')
   const origin = `http://127.0.0.1:${PORT}`
-  // CSP 指令的尾项会随版本变化（例如 1.3.1 的 frame-src 多了 plugin-ui:），
-  // 所以按指令名整体匹配，再追加本地媒体源，避免写死旧字符串导致升级后漏补。
+  // 1.4+ builds the app CSP from template literals; older builds use quoted
+  // strings. Patch only the app CSP form, not the plugin-UI/visualizer CSP.
+  const templateCsp = main.includes('`frame-src ')
   for (const name of ['frame-src', 'img-src', 'media-src']) {
-    const re = new RegExp(`"${name} [^"]*"`, 'g')
-    main = main.replace(re, (match) => match.includes(origin) ? match : `${match.slice(0, -1)} ${origin}"`)
+    const re = templateCsp ? new RegExp('`' + name + ' [^`]*`', 'g') : new RegExp(`"${name} [^"]*"`, 'g')
+    main = main.replace(re, (match) => {
+      const quote = templateCsp ? '`' : '"'
+      return match.includes(origin) || match.includes('${WALLPAPER_ENGINE_ORIGIN}')
+        ? match
+        : `${match.slice(0, -1)} ${origin}${quote}`
+    })
   }
   fs.writeFileSync(mainPath, main, 'utf8')
 
@@ -179,13 +196,11 @@ async function main() {
   if (!inspect.includes(`127.0.0.1:${PORT}`)) fail('回读校验失败：CSP 未放行本地媒体端口')
 
   const backup = `${ASAR_PATH}.te-we-backup`
-  // 应用更新会把 app.asar 换回官方原包：这时备份必须跟着换成新版本原包，
-  // 否则“还原”会把应用退回上一个版本。已经带桥的包不覆盖备份。
-  if (!original.includes('we-background.js')) {
+  if (!fs.existsSync(backup)) {
     fs.copyFileSync(ASAR_PATH, backup)
-    console.log(`[install] 已备份当前版本原包：${backup}`)
-  } else if (!fs.existsSync(backup)) {
-    console.log('[install] 警告：当前 app.asar 已带桥但缺少备份，跳过备份写入')
+    console.log(`[install] 已备份当前版本：${backup}`)
+  } else {
+    console.log('[install] 已存在 app.asar 备份，保留原备份')
   }
   fs.rmSync(ASAR_PATH, { force: true })
   fs.copyFileSync(newAsar, ASAR_PATH)
