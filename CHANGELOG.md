@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.3 — 2026-11-02
+
+- 在 Twilight Echo `1.4.0-preview2` 上复测通过，不新增功能。
+- `COMPATIBILITY.json` 记录 preview2，安装器与内置渲染桥行为不变。
+- 发布流程改为推送 `v*` 标签即自动构建并发布 `.tep`。
+
 ## 2.1.2
 
 - 适配 Twilight Echo `1.4.0-perview`

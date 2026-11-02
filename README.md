@@ -47,7 +47,7 @@
 2. 在插件管理中安装：
 
 ```text
-dist/com.twilightecho.tool.wallpaper-engine-2.1.2.tep
+dist/com.twilightecho.tool.wallpaper-engine-2.1.3.tep
 ```
 
 3. 重启 Twilight Echo
