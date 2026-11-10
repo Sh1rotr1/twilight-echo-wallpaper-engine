@@ -91,7 +91,20 @@ zoom          50..200（百分比）
 sceneVideo    旧场景视频缓存
 sceneRuntime  旧 manifest 运行时（兼容保留）
 userProps     每张壁纸的属性覆盖值 { [壁纸ID]: { [属性名]: 值 } }
+miniCover     迷你播放器是否使用壁纸背景（默认 true）
+playbackBg    播放页是否使用壁纸背景（默认 true）
+playlist      轮播：enabled / ids / trigger(timer|page) / intervalMin / pageCooldownSec / order / pauseWithPlayer / transition / fadeMs
+playlistCursor  轮播游标
+playlistNextAt  下一次定时切换时间
+playlistLastSwitch 上次切换时间（切页冷却用）
 ```
+
+### 4.1 轮播（2.3.0，实验性）
+
+- 触发二选一（`trigger`）：`timer` 宿主每 15s 检查 `playlistNextAt`；`page` 由桥采样页面签名（`.menu-item[aria-current="page"]` + `.playing-music`），稳定 500ms 后 `POST /api/playlist/page`，宿主按 `pageCooldownSec` 冷却。
+- 切换复用 `applyWallpaper(item, { keepPaused: true })`，写 `selected` 与 `rev`；桥按新 `selected` 重建媒体。
+- 过渡：桥在同一次重建里先铺目标壁纸 `/preview/<id>`，真实媒体 ready 后按 `fadeMs` 淡入；加载期间保留图层，避免闪回应用背景。
+- 护栏：`pauseWithPlayer` 暂停时停表；交互模式、页面模式下的隐藏/全屏不触发；失效 id 在 tick 时剪除；重启不补切。
 
 ## 5. 渲染桥
 
@@ -180,12 +193,35 @@ index.html?window=mini-player
 桥检测该 query 后：
 
 - 把 `#te-we-bg` 插入 `.mini-player-root`，使用 `position:absolute`，继承圆角和 `overflow:hidden`
-- 只在图层可见后隐藏 `.mini-window-fill` / `.mini-background-source` / `.mini-background-overlay` / `.mini-grain`
+- 只在图层可见后隐藏 `.mini-window-fill` / `.mini-background-source` / `.mini-grain`
+- `.mini-background-overlay` 保留并压到 55% 不透明度，保证小窗文字可读
 - 迷你窗口保持 `.mini-player-surface` 和所有控件
 - 禁用网页交互模式
-- 画质最高 720P，场景 30fps
+- 画质最高 720P，场景 `sceneFps=30`（桥内 `MINI` 强制降级，避免两个窗口同时原画解码）
 - 主题/布局重建 `.mini-player-root` 时，MutationObserver 会把图层重新挂回
 - 外观页开关 `miniCover` 控制是否覆盖迷你窗口；关闭后迷你窗口恢复自己的主题背景
+
+## 12. 播放页背景
+
+播放页是 `.playing-music`（`position:fixed; z-index:1100`），内部自带 `.backdrop`：
+
+```text
+.backdrop              background-color: var(--te-player-bg) + background-image
+.backdrop-cover-wrap   模糊封面（blur(58px)）
+.backdrop-fluid        流体背景
+.backdrop-solid        纯色/自定义图片
+.backdrop-scrim        72~78% 暗角 + backdrop-filter: blur(10px)
+.backdrop-accent       主题色径向渐变
+```
+
+桥在 `data-te-we-bg="on"` 且 `data-te-playback-bg="on"` 时：
+
+- `.backdrop` 底色 / 图片 / filter 置空
+- `.backdrop-cover-wrap` / `.backdrop-cover` / `.backdrop-fluid` / `.backdrop-solid` / `.backdrop-accent` 隐藏
+- `.backdrop-scrim` 保留一层 28% 暗角、去掉 blur，保证白字歌词可读
+
+开关 `playbackBg` 关闭后不写 `data-te-playback-bg`，播放页恢复宿主原本的背景。
+规则只作用于 `.playing-music .backdrop`，不覆盖 `--te-app-bg` 等全局 token，避免对话框/设置面板被一起打透明。
 
 ## 11. 壁纸属性（WE 用户属性）
 

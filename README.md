@@ -16,6 +16,9 @@
 - 视频和网页自动静音
 - 网页壁纸可进入交互模式
 - 迷你播放器：动态壁纸位于 `.mini-player-root` 内层，保留圆角窗口和播放器控件；外观页可开关“使用当前壁纸覆盖迷你播放器背景”，迷你窗口自动降画质、关闭网页交互
+- 播放页：壁纸作为播放页背景（可开关），宿主自带的模糊封面 / 暗角层被让开，只保留一层轻暗角保证歌词可读
+- 轮播：任选多张壁纸，二选一触发——按时间间隔自动换，或切换软件页面时换；支持顺序 / 随机、暂停时停表、预览图垫底淡入
+- 渲染桥带 `BRIDGE_VERSION`，升级后 `check-compat` 会直接告诉你桥是否需要重打
 - 读取 `project.json` 的壁纸属性，生成开关 / 滑杆 / 颜色 / 下拉 / 文件控件
 - 属性修改实时作用于当前壁纸，覆盖值按壁纸保存，可恢复默认
 - 兼容 Spine / WebGL 网页壁纸的 `../assets` 项目根路径
@@ -35,22 +38,24 @@
 - X / Y / Z
 - 缩放
 - 壁纸属性
+- 轮播：启用、方式（按时间 / 切换页面）、间隔、冷却、顺序、选择列表、下一张
 - 应用 / 暂停 / 交互 / 关闭
 
 ## 安装
 
-### 方式一：应用已集成渲染桥
+### 方式一：安装插件（推荐，插件会自己修桥）
 
-适用于 Twilight Echo 已按 [`docs/TE-PATCH.md`](docs/TE-PATCH.md) 集成 `we-background.js` 的版本。
+2.4.1 起插件自带宿主桥自愈：发现桥缺失/低于 v9 时，会在**应用退出后**自动把
+`we-background.js` 写回 `app.asar`，并恢复 `index.html` 入口与 CSP。
 
 1. 完全退出 Twilight Echo
 2. 在插件管理中安装：
 
 ```text
-dist/com.twilightecho.tool.wallpaper-engine-2.1.3.tep
+dist/com.twilightecho.tool.wallpaper-engine-2.4.1.tep
 ```
 
-3. 重启 Twilight Echo
+3. 重启 Twilight Echo（如需立即生效，双击仓库里的 `add-bridge.cmd`）
 4. 打开 `设置 → 外观 → 动态壁纸`
 
 ### 方式二：本地开发安装
@@ -106,6 +111,10 @@ dist/com.twilightecho.tool.wallpaper-engine-<version>.tep
 
 ## 本体接入
 
+> 不想等自动修复、或想手动接一次：见 [`docs/HOST-BRIDGE.md`](docs/HOST-BRIDGE.md)。
+> 仓库与发布包都附带 `bridge/we-background.js`（v9）；补丁器 `lib/bridge-adapt.mjs`
+> 用 Twilight Echo 自带的 node 运行，不需要额外装 Node/npm。
+
 插件 TEP 本身不会修改 Twilight Echo 的 `app.asar`。应用侧需要：
 
 1. 把 `patch/we-background.js` 放到 `out/renderer/we-background.js`
@@ -125,12 +134,13 @@ dist/com.twilightecho.tool.wallpaper-engine-<version>.tep
 4. 点“应用”
 5. 网页壁纸需要点击时点“交互”，右上角“退出交互”恢复界面
 6. 应用壁纸后出现“壁纸属性”，修改会实时生效
+7. 轮播：在「轮播」行点「启用」，点「选择列表」勾选至少 2 张，选择「按时间」或「切换页面」；间隔、冷却、顺序即时保存
 
 ## 兼容性
 
 当前开发与验证版本：
 
-- Twilight Echo `1.3.1` / `1.4.0-perview`
+- Twilight Echo `1.3.1` / `1.4.0-perview` / `1.4.0-preview2`
 - Wallpaper Engine 创意工坊壁纸
 - Windows
 

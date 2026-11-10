@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "plugin": {
     "id": "com.twilightecho.tool.wallpaper-engine",
-    "version": "2.1.3",
+    "version": "2.4.0",
     "apiVersion": 3,
-    "engines": ">=1.2.0",
+    "engines": ">=2.0.0",
     "permissions": [
       "filesystem:read",
       "filesystem:write",
@@ -17,12 +17,15 @@
     "tested": [
       "1.3.1",
       "1.4.0-perview",
-      "1.4.0-preview2"
+      "1.4.0-preview2",
+      "2.0.0",
+      "2.0.1"
     ],
     "notes": {
       "1.3.1": "CSP frame-src 为 'self' plugin-ui:；安装器按指令名追加 127.0.0.1:3100。",
       "1.4.0-perview": "1.4 起应用已内置 we-background.js 与 WALLPAPER_ENGINE_ORIGIN CSP；安装器更新桥版本并创建 app.asar 备份。",
-      "1.4.0-preview2": "在 1.4.0-preview2 上复测：内置 we-background.js 与 CSP 合并逻辑正常，安装器无需新增补丁。"
+      "1.4.0-preview2": "在 1.4.0-preview2 上复测：内置 we-background.js 与 CSP 合并逻辑正常，安装器无需新增补丁。2.2.0 起桥升到 v5，宿主桥 v<5 会被覆盖（恢复迷你播放器与播放页背景）。",
+      "2.0.0": "2.0.0 已内置 v5 桥（含播放页背景/迷你播放器），但缺 v9 的轮播；外观页仍有“背景与材质”锚点、CSP 已含 127.0.0.1:3100、CSS 钩子齐全。安装器只需把 out/renderer/we-background.js 升到 v9 并重建 app.asar（首次会生成 te-we-backup）。"
     }
   },
   "paths": {
@@ -64,6 +67,11 @@
     "POST /api/apply",
     "POST /api/layout",
     "POST /api/control",
+    "GET /api/playlist",
+    "POST /api/playlist",
+    "POST /api/playlist/action",
+    "POST /api/playlist/page",
+    "POST /api/playlist/context",
     "GET /api/props/<id>",
     "POST /api/props",
     "POST /api/props/reset",
@@ -93,8 +101,18 @@
     "offsetZ",
     "zoom",
     "userProps",
-    "miniCover"
+    "miniCover",
+    "playbackBg",
+    "playlist",
+    "playlistCursor",
+    "playlistNextAt",
+    "playlistLastSwitch"
   ],
+  "bridge": {
+    "version": 9,
+    "detection": "BRIDGE_VERSION 常量；安装器仅在宿主版本 < 插件版本时覆盖",
+    "versionConstant": "out/renderer/we-background.js 内 `var BRIDGE_VERSION = 9`"
+  },
   "scene": {
     "engine": "webwallgl@3.x",
     "adapter": "lib/webwallgl/index.html + renderer.js",
@@ -119,6 +137,7 @@
     "main frame/img/media CSP contains 127.0.0.1:3100",
     "SettingsPage assets contain 背景与材质",
     "CSS contains .app-background-layer/.settings-overlay-root/te-settings-surface",
-    "backup exists and matches current official version"
+    "backup exists and matches current official version",
+    "bridge BRIDGE_VERSION >= 9（播放页背景 / 迷你播放器 / 轮播）"
   ]
 }

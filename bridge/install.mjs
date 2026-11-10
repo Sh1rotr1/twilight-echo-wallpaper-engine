@@ -151,15 +151,17 @@ async function main() {
 
   const bridgePath = path.join(renderer, 'we-background.js')
   const existingBridge = fs.existsSync(bridgePath) ? fs.readFileSync(bridgePath, 'utf8') : ''
-  const hostIntegratedBridge =
-    existingBridge.includes('securitypolicyviolation') &&
-    existingBridge.includes('playbackStatus') &&
-    existingBridge.includes('te-we-mini-cover') &&
-    existingBridge.includes('data-te-lyric-invert')
-  if (hostIntegratedBridge) {
-    console.log('[install] 检测到已适配的宿主渲染桥，保留')
+  const shippedBridge = fs.readFileSync(path.join(HERE, 'we-background.js'), 'utf8')
+  const bridgeVersion = (text) => Number((String(text).match(/BRIDGE_VERSION\s*=\s*(\d+)/) || [])[1] || 0)
+  const shippedVersion = bridgeVersion(shippedBridge)
+  const hostVersion = bridgeVersion(existingBridge)
+  // 只按版本号判断：宿主桥没有 BRIDGE_VERSION 时视为旧版（0），用插件桥覆盖。
+  // 早期用特性嗅探（te-we-mini-cover 等）判断，会把缺失迷你播放器支持的宿主桥误判为“已集成”。
+  if (shippedVersion > 0 && hostVersion >= shippedVersion) {
+    console.log(`[install] 宿主渲染桥 v${hostVersion} ≥ v${shippedVersion}，保留`)
   } else {
     fs.copyFileSync(path.join(HERE, 'we-background.js'), bridgePath)
+    console.log(`[install] 渲染桥 ${hostVersion > 0 ? `v${hostVersion}` : existingBridge ? 'legacy' : '缺失'} → v${shippedVersion}`)
   }
 
   // The main process installs an authoritative CSP response header for the app

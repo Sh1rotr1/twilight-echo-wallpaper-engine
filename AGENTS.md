@@ -20,6 +20,8 @@ Twilight Echo（Electron 音乐播放器）的 Wallpaper Engine 动态背景插�
 - 壁纸属性（`project.json general.properties`，WE 用户属性）要保留检测、动态控件、条件显隐、按壁纸存覆盖值；覆盖值在插件设置 `userProps` 里，不要改成只存在内存。
 - 壁纸属性只对**已应用**的壁纸显示和生效；切换下拉候选不能加载/预览属性，点“应用”后再加载。
 - 壁纸属性调整必须实时：桥用 `postMessage({type:'te-prop'})` 直推 iframe，不能只靠轮询或“应用”按钮。
+- 轮播状态在 `playlist`，触发方式 `trigger` 只能二选一（`timer` / `page`）；切换必须复用 `applyWallpaper(item, { keepPaused: true })`，不要另写渲染路径。
+- 切页触发依赖宿主导航的 `.menu-item[aria-current="page"]` + `data-page-id` 与 `.playing-music`；本体升级若改导航结构，需同步校准 `pageSignature()`。
 
 ## 快速命令
 
@@ -27,7 +29,10 @@ Twilight Echo（Electron 音乐播放器）的 Wallpaper Engine 动态背景插�
 # 只检查当前安装是否兼容（只读）
 node scripts/check-compat.mjs "D:\TwilightEcho"
 
-# 打桥 + 安装插件（需先完全退出 Twilight Echo）
+# 只打桥（无需 npm；用 Twilight Echo 自带 node；也可直接双击 add-bridge.cmd）
+"D:\TwilightEcho\resources\core-node\runtime\node.exe" lib/bridge-adapt.mjs --app "D:\TwilightEcho"
+
+# 打桥 + 安装插件（旧流程，需 @electron/asar）
 node bridge/install.mjs "D:\TwilightEcho"
 
 # 还原本体
@@ -43,12 +48,15 @@ lib/webwallgl/                   WebWallGL 适配页 + 引擎
 lib/we-props.js                 壁纸属性解析（DSH 同款）
 lib/scene-manifest.js           旧场景解析（兼容保留）
 lib/scene-player.js             旧场景播放器（兼容保留）
+lib/bridge-adapt.mjs            宿主桥自愈 / 手动打桥（自带 asar 读写）
+lib/asar-lite.cjs               自带 asar 读写（无 npm 依赖）
 lib/vendor-jpeg-js/             旧场景 JPEG 解码
 bridge/we-background.js          注入到 app.asar 的渲染桥
 bridge/install.mjs               单文件本体补丁 + 插件安装
 COMPATIBILITY.json               机器可读的版本/补丁点/路由
 docs/ARCHITECTURE.md             数据流和状态字段
 docs/ADAPTING.md                 Twilight Echo 升级后的适配步骤
+docs/HOST-BRIDGE.md              使用者手动添加宿主桥的教学
 ```
 
 ## 本体补丁点（升级时最可能变的地方）
@@ -61,6 +69,7 @@ docs/ADAPTING.md                 Twilight Echo 升级后的适配步骤
    - 安装器按**指令名**匹配，不写死旧字符串；新版本 `frame-src 'self' plugin-ui:` 已适配
 3. `out/renderer/we-background.js`
    - 新文件；不属于原包
+   - 文件内 `var BRIDGE_VERSION = 9`：宿主桥 < 9 时安装器会覆盖；改桥必须同步升这个号
 4. 备份
    - `resources/app.asar.te-we-backup` 必须是**当前版本原包**；升级后安装器会刷新
 

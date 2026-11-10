@@ -72,9 +72,17 @@ const media = pickDirective(main, 'media-src')
 
 const bridgeInstalled = index.includes('we-background.js')
 const bridgeText = read(asarPath, 'out/renderer/we-background.js') || ''
+const bridgeVersion = Number((bridgeText.match(/BRIDGE_VERSION\s*=\s*(\d+)/) || [])[1] || 0)
+// 以插件自带桥（patch/we-background.js）的版本号为唯一基准：宿主桥低于它就必须重跑安装器。
+const shippedBridgeText = (() => {
+  try { return fs.readFileSync(path.join(HERE, '..', 'patch', 'we-background.js'), 'utf8') }
+  catch { return '' }
+})()
+const REQUIRED_BRIDGE_VERSION = Number((shippedBridgeText.match(/BRIDGE_VERSION\s*=\s*(\d+)/) || [])[1] || 5)
 const bridgeHostIntegrated = bridgeText.includes('securitypolicyviolation') && bridgeText.includes('playbackStatus')
 const bridgeFeaturesIntegrated = bridgeText.includes('te-we-mini-cover') && bridgeText.includes('data-te-lyric-invert')
-const bridgeFresh = bridgeHostIntegrated && bridgeFeaturesIntegrated
+const bridgePlaybackIntegrated = bridgeText.includes('data-te-playback-bg')
+const bridgeFresh = bridgeVersion >= REQUIRED_BRIDGE_VERSION
 const indexCsp = index.includes(ORIGIN)
 const csp = {
   frame,
@@ -124,7 +132,7 @@ try {
 const issues = []
 if (!pkg.version) issues.push('无法读取 app.asar/package.json 版本')
 if (!bridgeInstalled) issues.push('渲染桥未安装（升级后需要重跑 bridge/install.mjs）')
-else if (!bridgeFresh) issues.push('渲染桥版本过旧，需要重跑 bridge/install.mjs')
+else if (!bridgeFresh) issues.push(`渲染桥 v${bridgeVersion || 'legacy'} < v${REQUIRED_BRIDGE_VERSION}，需要重跑 bridge/install.mjs（播放页背景与迷你播放器依赖 v5）`)
 if (!indexCsp) issues.push('index.html meta CSP 未放行 127.0.0.1:3100')
 if (!csp.frameOk) issues.push('main frame-src 未放行 127.0.0.1:3100')
 if (!csp.imgOk) issues.push('main img-src 未放行 127.0.0.1:3100')
@@ -148,9 +156,12 @@ console.log(JSON.stringify({
   tested,
   testedMatch,
   bridgeInstalled,
+  bridgeVersion,
+  requiredBridgeVersion: REQUIRED_BRIDGE_VERSION,
   bridgeFresh,
   bridgeHostIntegrated,
   bridgeFeaturesIntegrated,
+  bridgePlaybackIntegrated,
   indexCsp,
   csp,
   appearanceAnchor,

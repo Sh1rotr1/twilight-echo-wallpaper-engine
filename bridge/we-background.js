@@ -1,6 +1,7 @@
 /* Twilight Echo × Wallpaper Engine — renderer bridge.
  *
- * Vendored from the Wallpaper Engine 2.1.0 TEP, with host integration fixes.
+ * Vendored from the Wallpaper Engine 2.2.0 TEP, with host integration fixes.
+ * BRIDGE_VERSION 9: carousel mode switch (timer or page), poster fade.
  * Vite copies this public asset into app.asar (out/renderer/).
  * It owns a single fixed layer at the very bottom of the window, below #app,
  * and asks the plugin's loopback server (127.0.0.1:3100) what to play.
@@ -17,6 +18,7 @@
   var API = 'http://127.0.0.1:3100'
   var STYLE_ID = 'te-we-bg-style'
   var POLL_MS = 2000
+  var BRIDGE_VERSION = 9
 
   if (window.__TE_WE_BG__) return
   window.__TE_WE_BG__ = true
@@ -24,7 +26,8 @@
   var layer = null
   var media = null
   var scrim = null
-  var current = { signature: '', paused: false, fit: 'cover', scrim: 0, quality: 'original', scene: false, miniCover: true, lyricInvert: true }
+  var poster = null
+  var current = { signature: '', paused: false, fit: 'cover', scrim: 0, quality: 'original', scene: false, miniCover: true, playbackBg: true }
   var failures = 0
   var lastActive = false
   var pollCount = 0
@@ -45,9 +48,21 @@
     if (status) status.textContent = playbackStatus()
   }
 
+  function dropPoster() {
+    if (!poster) return
+    var node = poster
+    poster = null
+    node.style.opacity = '0'
+    window.setTimeout(function () {
+      if (node.parentNode) node.remove()
+    }, 500)
+  }
+
   function mediaReady() {
     if (!lastActive || current.mediaStatus === 'error') return
     current.mediaStatus = 'ready'
+    if (media) media.style.opacity = '1'
+    dropPoster()
     updatePresentation()
     syncPlaybackStatus()
   }
@@ -56,6 +71,7 @@
     current.mediaStatus = 'error'
     current.mediaError = message
     if (activeVideo) activeVideo.pause()
+    dropPoster()
     updatePresentation()
     syncPlaybackStatus()
   }
@@ -244,25 +260,28 @@
     '  .mini-player-root:not(.is-customizing) :is(',
     '    .mini-window-fill,',
     '    .mini-background-source,',
-    '    .mini-background-overlay,',
     '    .mini-grain',
     '  ) {',
     '  display: none !important;',
     '}',
-    'html[data-te-we-bg="on"][data-te-lyric-invert="on"] .playing-music .lyric-text,',
-    'html[data-te-we-bg="on"][data-te-lyric-invert="on"] .playing-music .lyric-translation,',
-    'html[data-te-we-bg="on"][data-te-lyric-invert="on"] .playing-music .lyric-romanization,',
-    'html[data-te-we-bg="on"][data-te-lyric-invert="on"] .playing-music .lyric-voice-translation,',
-    'html[data-te-we-bg="on"][data-te-lyric-invert="on"] .playing-music .lyric-voice-romanization {',
-    '  color: #fff !important;',
-    '  mix-blend-mode: difference;',
-    '  text-shadow: none !important;',
-    '  -webkit-text-stroke: 0 !important;',
+    'html[data-te-window="mini-player"][data-te-we-bg="on"]',
+    '  .mini-player-root:not(.is-customizing) .mini-background-overlay {',
+    '  opacity: 0.55 !important;',
     '}',
-    'html[data-te-we-bg="on"][data-te-lyric-invert="on"] .playing-music .lyric-word,',
-    'html[data-te-we-bg="on"][data-te-lyric-invert="on"] .playing-music .lyric-char,',
-    'html[data-te-we-bg="on"][data-te-lyric-invert="on"] .playing-music .lyric-row.is-singing .lyric-voice--lead {',
-    '  color: #fff !important;',
+    'html[data-te-we-bg="on"][data-te-playback-bg="on"] .playing-music .backdrop {',
+    '  background: transparent !important;',
+    '  background-image: none !important;',
+    '  filter: none !important;',
+    '}',
+    'html[data-te-we-bg="on"][data-te-playback-bg="on"] .playing-music :is(',
+    '  .backdrop-cover-wrap, .backdrop-cover, .backdrop-fluid, .backdrop-solid, .backdrop-accent',
+    ') {',
+    '  display: none !important;',
+    '}',
+    'html[data-te-we-bg="on"][data-te-playback-bg="on"] .playing-music .backdrop-scrim {',
+    '  background: rgba(5, 7, 11, 0.28) !important;',
+    '  backdrop-filter: none !important;',
+    '  -webkit-backdrop-filter: none !important;',
     '}'
   ].join('\n')
 
@@ -323,6 +342,7 @@
       cancelAnimationFrame(rafId)
       rafId = 0
     }
+    dropPoster()
     if (activeVideo) {
       activeVideo.pause()
       activeVideo.removeAttribute('src')
@@ -344,7 +364,7 @@
     current.mediaError = ''
     clearMedia()
     document.documentElement.setAttribute('data-te-we-bg', 'off')
-    document.documentElement.removeAttribute('data-te-lyric-invert')
+    document.documentElement.removeAttribute('data-te-playback-bg')
     var exit = document.getElementById('te-we-exit')
     if (exit) exit.remove()
     if (layer) {
@@ -522,11 +542,15 @@
 
   function updatePresentation() {
     var ready = lastActive && current.mediaStatus === 'ready'
-    document.documentElement.setAttribute('data-te-we-bg', ready ? 'on' : 'off')
-    if (ready && current.lyricInvert !== false)
-      document.documentElement.setAttribute('data-te-lyric-invert', 'on')
-    else document.documentElement.removeAttribute('data-te-lyric-invert')
-    if (layer) layer.classList.toggle('te-we-visible', ready)
+    // Keep the layer on screen while the next wallpaper loads: the poster
+    // image stands in, so a carousel switch never drops to the app background.
+    var holding = lastActive && current.mediaStatus === 'loading' && Boolean(poster)
+    var shown = ready || holding
+    document.documentElement.setAttribute('data-te-we-bg', shown ? 'on' : 'off')
+    if (shown && current.playbackBg !== false)
+      document.documentElement.setAttribute('data-te-playback-bg', 'on')
+    else document.documentElement.removeAttribute('data-te-playback-bg')
+    if (layer) layer.classList.toggle('te-we-visible', shown)
     var interactive = ready && current.interactive
     if (layer) layer.classList.toggle('te-we-interactive', interactive)
     var exit = document.getElementById('te-we-exit')
@@ -575,12 +599,16 @@
 
     var fit = state.fit === 'contain' || state.fit === 'fill' ? state.fit : 'cover'
     var quality = state.quality === '1080' || state.quality === '720' ? state.quality : 'original'
+    // 迷你窗口是第二个渲染进程：原画 + 60fps 场景会同时解码两份。
+    if (MINI && quality === 'original') quality = '720'
+    if (MINI && state.type === 'web' && typeof state.url === 'string' && state.url.indexOf('/scene-live/') === 0)
+      state = Object.assign({}, state, { url: state.url.replace('sceneFps=60', 'sceneFps=30') })
     var signature = [state.type || '', state.url || '', state.preview || '', quality].join('|')
     current.id = state.id || ''
     current.preview = state.preview || ''
     current.scene = state.scene === true
     current.miniCover = state.miniCover !== false
-    current.lyricInvert = state.lyricInvert !== false
+    current.playbackBg = state.playbackBg !== false
 
     if (signature !== current.signature) {
       current.signature = signature
@@ -588,6 +616,21 @@
       current.mediaStatus = 'loading'
       current.mediaError = ''
       current.sourceUrl = API + (state.url || state.preview || '')
+      var fade = Math.max(0, Math.min(1000, Number(state.fadeMs) || 0))
+      if (fade > 0 && state.preview) {
+        poster = document.createElement('img')
+        poster.className = 'te-we-poster'
+        poster.alt = ''
+        poster.src = API + state.preview
+        poster.style.cssText =
+          'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;opacity:0;transition:opacity ' +
+          Math.round(fade * 0.5) +
+          'ms ease'
+        el.appendChild(poster)
+        window.requestAnimationFrame(function () {
+          if (poster) poster.style.opacity = '1'
+        })
+      }
       updatePresentation()
       if (state.url && (state.type === 'video' || state.type === 'scene')) {
         media = makeVideo(state.url, fit, quality)
@@ -612,8 +655,13 @@
       } else if (state.preview) {
         media = makeImage(state.preview, fit)
       }
-      if (media) el.appendChild(media)
-      else mediaFailed('壁纸没有可播放的画面')
+      if (media) {
+        if (fade > 0) {
+          media.style.transition = 'opacity ' + fade + 'ms ease'
+          media.style.opacity = '0'
+        }
+        el.appendChild(media)
+      } else mediaFailed('壁纸没有可播放的画面')
       scrim = document.createElement('div')
       scrim.className = 'te-we-scrim'
       el.appendChild(scrim)
@@ -652,10 +700,78 @@
     }
   }
 
+  /* ------------------- 轮播：页面切换触发与窗口状态上报 ------------------- */
+
+  function pageSignature() {
+    var active = document.querySelector('.menu-item[aria-current="page"]')
+    var page = active ? active.getAttribute('data-page-id') || '' : ''
+    var playing = document.querySelector('.playing-music') ? 'playing' : ''
+    var settings = document.querySelector('.settings-overlay-root--active') ? 'settings' : ''
+    return page + '|' + playing + '|' + settings
+  }
+
+  function startPageWatcher() {
+    if (MINI) return
+    var stable = ''
+    var stableAt = 0
+    var baseline = ''
+    window.setInterval(function () {
+      if (document.hidden) return
+      // 设置页可能被缓存留在 DOM 里，只有真正可见才算“设置中”；
+      // 设置中不记录基准，关闭设置后的第一次就位不会误触发。
+      var pickerEl = document.getElementById('te-we-picker')
+      var settingsOpen = Boolean(document.querySelector('.settings-overlay-root--active')) ||
+        Boolean(pickerEl && pickerEl.getClientRects().length)
+      if (settingsOpen) {
+        stable = ''
+        stableAt = 0
+        baseline = ''
+        return
+      }
+      var sig = pageSignature()
+      if (!sig || sig === '||') return
+      if (sig !== stable) {
+        stable = sig
+        stableAt = Date.now()
+        return
+      }
+      if (Date.now() - stableAt < 500) return
+      if (!baseline) {
+        baseline = sig
+        return
+      }
+      if (sig === baseline) return
+      var from = baseline
+      baseline = sig
+      fetch(API + '/api/playlist/page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ from: from, to: sig })
+      }).catch(function () {})
+    }, 700)
+  }
+
+  function reportContext() {
+    if (MINI) return
+    fetch(API + '/api/playlist/context', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        hidden: document.hidden,
+        fullscreen: Boolean(document.fullscreenElement)
+      })
+    }).catch(function () {})
+  }
+
   function boot() {
     beacon('/api/bridge-boot')
     installStyle()
     poll()
+    startPageWatcher()
+    reportContext()
+    window.setInterval(reportContext, 20000)
+    document.addEventListener('visibilitychange', reportContext)
+    document.addEventListener('fullscreenchange', reportContext)
   }
 
   function appearanceOpen() {
@@ -733,10 +849,10 @@
       '<span>使用当前壁纸覆盖迷你播放器背景</span>',
       '</label></div>',
       '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(127,127,127,.15)">',
-      '<div style="width:110px;flex:none">播放页歌词</div>',
+      '<div style="width:110px;flex:none">播放页</div>',
       '<label style="flex:1;display:flex;align-items:center;gap:8px;cursor:pointer">',
-      '<input id="te-we-lyric-invert" type="checkbox">',
-      '<span>实时反相（实验性）</span>',
+      '<input id="te-we-playback-bg" type="checkbox">',
+      '<span>使用当前壁纸作为播放页背景</span>',
       '</label></div>',
       '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(127,127,127,.15)">',
       '<div style="width:110px;flex:none">填充 / 暗化</div>',
@@ -759,6 +875,25 @@
       '<input id="te-we-zoom" type="range" min="50" max="200" step="5" value="100" style="flex:1">',
       '<span id="te-we-zoom-val" style="width:46px;text-align:right;font-size:11px;opacity:.8">100%</span>',
       '</div></div>',
+      '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid rgba(127,127,127,.15);flex-wrap:wrap">',
+      '<div style="width:110px;flex:none">轮播</div>',
+      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input id="te-we-car-on" type="checkbox"><span>启用</span></label>',
+      '<span id="te-we-car-summary" style="flex:1;min-width:90px;font-size:12px;opacity:.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">未启用</span>',
+      '<button id="te-we-car-manage" style="padding:4px 9px;border:1px solid rgba(127,127,127,.35);border-radius:8px;background:transparent;color:inherit;cursor:pointer;font:inherit;font-size:12px">选择列表</button>',
+      '<button id="te-we-car-next" style="padding:4px 9px;border:1px solid rgba(127,127,127,.35);border-radius:8px;background:transparent;color:inherit;cursor:pointer;font:inherit;font-size:12px">下一张</button>',
+      '</div>',
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;padding:0 0 10px 120px;font-size:12px">',
+      '<label style="display:flex;align-items:center;gap:6px">方式 <select id="te-we-car-trigger" style="padding:3px 6px;border-radius:7px;border:1px solid rgba(127,127,127,.35);background:rgba(127,127,127,.10);color:inherit;font:inherit"><option value="timer">按时间</option><option value="page">切换页面</option></select></label>',
+      '<label style="display:flex;align-items:center;gap:6px">每隔 <select id="te-we-car-interval" style="padding:3px 6px;border-radius:7px;border:1px solid rgba(127,127,127,.35);background:rgba(127,127,127,.10);color:inherit;font:inherit"><option value="1">1</option><option value="5">5</option><option value="10">10</option><option value="15">15</option><option value="30">30</option><option value="60">60</option><option value="120">120</option></select> 分钟</label>',
+      '<label style="display:flex;align-items:center;gap:6px">冷却 <select id="te-we-car-cooldown" style="padding:3px 6px;border-radius:7px;border:1px solid rgba(127,127,127,.35);background:rgba(127,127,127,.10);color:inherit;font:inherit"><option value="15">15</option><option value="30">30</option><option value="60">60</option><option value="120">120</option></select> 秒</label>',
+      '<label style="display:flex;align-items:center;gap:6px">顺序 <select id="te-we-car-order" style="padding:3px 6px;border-radius:7px;border:1px solid rgba(127,127,127,.35);background:rgba(127,127,127,.10);color:inherit;font:inherit"><option value="loop">按列表</option><option value="shuffle">随机</option></select></label>',
+      '<label style="display:flex;align-items:center;gap:6px"><input id="te-we-car-pause" type="checkbox">暂停时停表</label>',
+      '</div>',
+      '<div id="te-we-car-list" style="display:none;padding:0 0 10px 120px">',
+      '<input id="te-we-car-search" placeholder="筛选壁纸…" style="width:100%;box-sizing:border-box;padding:5px 8px;border-radius:8px;border:1px solid rgba(127,127,127,.35);background:rgba(127,127,127,.10);color:inherit;font:inherit;margin-bottom:6px">',
+      '<div id="te-we-car-items" style="max-height:220px;overflow:auto"></div>',
+      '<div style="margin-top:4px;font-size:11px;opacity:.5">勾选立即生效；至少 2 张才会轮播</div>',
+      '</div>',
       '<div id="te-we-widgets" style="display:none;padding:10px 0;border-top:1px solid rgba(127,127,127,.15)"></div>',
       '<div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid rgba(127,127,127,.15)">',
       '<button id="te-we-picker-apply" style="flex:1;padding:7px;border:0;border-radius:9px;background:var(--color-primary-500,#ff5c8a);color:#fff;cursor:pointer;font:inherit">应用</button>',
@@ -775,7 +910,7 @@
     var fit = card.querySelector('#te-we-picker-fit')
     var scrim = card.querySelector('#te-we-picker-scrim')
     var miniCover = card.querySelector('#te-we-mini-cover')
-    var lyricInvert = card.querySelector('#te-we-lyric-invert')
+    var playbackBg = card.querySelector('#te-we-playback-bg')
     var status = card.querySelector('#te-we-picker-status')
     var pause = card.querySelector('#te-we-picker-pause')
     var xInput = card.querySelector('#te-we-x')
@@ -826,7 +961,7 @@
           if (data.state.scrim != null) scrim.value = String(data.state.scrim)
           if (data.state.quality) quality.value = data.state.quality
           if (data.state.miniCover != null) miniCover.checked = data.state.miniCover !== false
-          if (data.state.lyricInvert != null) lyricInvert.checked = data.state.lyricInvert !== false
+          if (data.state.playbackBg != null) playbackBg.checked = data.state.playbackBg !== false
           if (data.state.offsetX != null) xInput.value = String(data.state.offsetX)
           if (data.state.offsetY != null) yInput.value = String(data.state.offsetY)
           if (data.state.offsetZ != null) zInput.value = String(data.state.offsetZ)
@@ -842,11 +977,189 @@
       })
 
     filter.addEventListener('input', renderOptions)
+
+    /* ------------------------------ 轮播控制 ------------------------------ */
+
+    var car = {
+      enabled: false,
+      ids: [],
+      trigger: 'timer',
+      intervalMin: 15,
+      pageCooldownSec: 60,
+      order: 'loop',
+      pauseWithPlayer: true,
+      nextAt: 0
+    }
+    var carOpen = false
+    var carOn = card.querySelector('#te-we-car-on')
+    var carSummary = card.querySelector('#te-we-car-summary')
+    var carInterval = card.querySelector('#te-we-car-interval')
+    var carTrigger = card.querySelector('#te-we-car-trigger')
+    var carCooldown = card.querySelector('#te-we-car-cooldown')
+    var carOrder = card.querySelector('#te-we-car-order')
+    var carPause = card.querySelector('#te-we-car-pause')
+    var carList = card.querySelector('#te-we-car-list')
+    var carItems = card.querySelector('#te-we-car-items')
+    var carSearch = card.querySelector('#te-we-car-search')
+    var carManage = card.querySelector('#te-we-car-manage')
+    var carNext = card.querySelector('#te-we-car-next')
+
+    function carPost(path2, body) {
+      return fetch(API + path2, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(body || {})
+      }).then(function (response) {
+        return response.json()
+      })
+    }
+
+    function fmtClock(ts) {
+      if (!ts) return ''
+      var d = new Date(ts)
+      return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2)
+    }
+
+    function renderCar() {
+      if (!carOn) return
+      carOn.checked = car.enabled === true
+      carTrigger.value = car.trigger === 'page' ? 'page' : 'timer'
+      carInterval.value = String(car.intervalMin || 15)
+      carCooldown.value = String(car.pageCooldownSec || 60)
+      carInterval.disabled = car.trigger !== 'timer'
+      carCooldown.disabled = car.trigger !== 'page'
+      carPause.checked = car.pauseWithPlayer !== false
+      carOrder.value = car.order === 'shuffle' ? 'shuffle' : 'loop'
+      var text = car.ids.length >= 2 ? '已选 ' + car.ids.length + ' 张' : '至少选 2 张'
+      var index = car.ids.indexOf(current.id)
+      if (index !== -1) text += ' · 第 ' + (index + 1) + '/' + car.ids.length + ' 张'
+      if (car.enabled && car.trigger === 'timer' && car.nextAt) text += ' · 下次 ' + fmtClock(car.nextAt)
+      if (car.enabled && car.trigger === 'page') text += ' · 切页触发'
+      carSummary.textContent = text
+      carList.style.display = carOpen ? '' : 'none'
+    }
+
+    function renderCarItems() {
+      if (!carItems) return
+      var q = (carSearch.value || '').trim().toLowerCase()
+      carItems.textContent = ''
+      var shown = allItems.filter(function (item) {
+        return !q || (item.title + ' ' + item.type).toLowerCase().indexOf(q) !== -1
+      })
+      shown.forEach(function (item) {
+        var row = document.createElement('label')
+        row.style.cssText =
+          'display:flex;align-items:center;gap:8px;padding:3px 4px;font-size:12px;cursor:pointer;border-radius:6px'
+        var box = document.createElement('input')
+        box.type = 'checkbox'
+        box.checked = car.ids.indexOf(item.id) !== -1
+        box.onchange = function () {
+          var ids = car.ids.slice()
+          if (box.checked) {
+            if (ids.indexOf(item.id) === -1) ids.push(item.id)
+          } else {
+            ids = ids.filter(function (id) {
+              return id !== item.id
+            })
+          }
+          saveCar({ ids: ids })
+        }
+        var name = document.createElement('span')
+        name.textContent = item.title
+        name.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'
+        var kind = document.createElement('span')
+        kind.textContent = labels[item.type] || item.type
+        kind.style.cssText = 'font-size:11px;opacity:.45;flex:none'
+        row.appendChild(box)
+        row.appendChild(name)
+        row.appendChild(kind)
+        carItems.appendChild(row)
+      })
+      if (!shown.length) {
+        var empty = document.createElement('div')
+        empty.textContent = '没有匹配的壁纸'
+        empty.style.cssText = 'font-size:12px;opacity:.5;padding:4px'
+        carItems.appendChild(empty)
+      }
+    }
+
+    function saveCar(patch) {
+      return carPost('/api/playlist', patch)
+        .then(function (result) {
+          if (result && result.ok && result.playlist) {
+            car = Object.assign(car, result.playlist, { nextAt: result.nextAt || 0 })
+            renderCar()
+            if (carOpen) renderCarItems()
+          }
+          return result
+        })
+        .catch(function () {
+          carSummary.textContent = '轮播设置保存失败'
+        })
+    }
+
+    function loadCar() {
+      if (!card.isConnected) return
+      fetch(API + '/api/playlist', { cache: 'no-store' })
+        .then(function (response) {
+          return response.json()
+        })
+        .then(function (result) {
+          if (!result || !result.ok) return
+          car = Object.assign(car, result.playlist, { nextAt: result.nextAt || 0 })
+          renderCar()
+          if (carOpen) renderCarItems()
+        })
+        .catch(function () {})
+    }
+
+    carOn.addEventListener('change', function () {
+      saveCar({ enabled: carOn.checked })
+    })
+    carTrigger.addEventListener('change', function () {
+      saveCar({ trigger: carTrigger.value })
+    })
+    carCooldown.addEventListener('change', function () {
+      saveCar({ pageCooldownSec: Number(carCooldown.value) })
+    })
+    carPause.addEventListener('change', function () {
+      saveCar({ pauseWithPlayer: carPause.checked })
+    })
+    carOrder.addEventListener('change', function () {
+      saveCar({ order: carOrder.value })
+    })
+    carInterval.addEventListener('change', function () {
+      saveCar({ intervalMin: Number(carInterval.value) })
+    })
+    carManage.addEventListener('click', function () {
+      carOpen = !carOpen
+      carList.style.display = carOpen ? '' : 'none'
+      if (carOpen) renderCarItems()
+    })
+    carSearch.addEventListener('input', renderCarItems)
+    carNext.addEventListener('click', function () {
+      carPost('/api/playlist/action', { action: 'next' })
+        .then(function (result) {
+          if (result && result.ok && result.state) render(result.state)
+          status.textContent = result && result.ok ? '已换下一张' : '切换失败'
+          loadCar()
+        })
+        .catch(function () {
+          status.textContent = '切换失败'
+        })
+    })
+
+    loadCar()
+    window.setInterval(loadCar, 5000)
+
     miniCover.addEventListener('change', function () {
       request('/api/control', { action: 'mini-cover', value: miniCover.checked }).catch(function () {})
     })
-    lyricInvert.addEventListener('change', function () {
-      request('/api/control', { action: 'lyric-invert', value: lyricInvert.checked }).catch(function () {})
+    playbackBg.addEventListener('change', function () {
+      // 立即生效，不等下一次 2s 轮询；服务端拒绝时会回滚。
+      current.playbackBg = playbackBg.checked
+      updatePresentation()
+      request('/api/control', { action: 'playback-bg', value: playbackBg.checked }).catch(function () {})
     })
 
     var layoutTimer = 0
