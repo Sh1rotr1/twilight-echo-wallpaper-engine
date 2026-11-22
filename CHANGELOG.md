@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.0.0 — 2026-11-22
+
+**原生桥（v5）适配版：不再修改 Twilight Echo 本体。**
+
+- **移除宿主补丁路径**：删除 `bridge/`、`patch/`、`lib/bridge-adapt.mjs`、`add-bridge.cmd`、
+  `docs/TE-PATCH.md`、`docs/HOST-BRIDGE.md`。插件不再写 `resources/app.asar`、不再生成备份、
+  不再排队退出后打补丁。
+- **新增只读桥探测**：`lib/host-bridge.mjs` 读取宿主 `out/renderer/we-background.js` 的
+  `BRIDGE_VERSION`，判定 `native`（5–8）/`enhanced`（≥9）/`unsupported`/`missing`。
+- **Twilight Echo 2.0.2 原生适配**：官方桥 v5 下保留视频/网页/场景、画质、填充、暗化、X/Y/Z、
+  缩放、壁纸属性、迷你播放器、播放页背景；不启动轮播定时器，不显示轮播字段。
+- **轮播降级**：轮播（定时/切页）与淡入只在桥 ≥ v9 时出现；`playlist.ids` 等旧数据保留，
+  但原生模式下 `enabled` 会被强制为 false，避免用户看不到入口却仍自动换图。
+- **设置面板**：通知文案显示宿主版本、桥版本与模式；原生模式明确提示轮播需要 v9。
+- **兼容检查**：`check-compat.mjs` 改为原生/增强双模式，不再要求 `app.asar` 备份或安装器；
+  `COMPATIBILITY.json` 增加 2.0.2 与模式能力表。
+- **发布包**：`.tep` 只包含插件运行时，不再附带 `patch/we-background.js`。
+
 ## 2.4.2 — 2026-11-11
 
 适配 Twilight Echo **2.0.2**，并修原子替换的重试等待。

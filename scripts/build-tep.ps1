@@ -2,9 +2,9 @@
 #
 #   pwsh ./scripts/build-tep.ps1
 #
-# The resulting package contains the plugin runtime plus patch/we-background.js
-# and docs/TE-PATCH.md for the Twilight Echo maintainer. It does not modify
-# Twilight Echo's app.asar by itself.
+# The package contains only the plugin runtime. It never writes Twilight Echo's
+# resources/app.asar; the host renderer bridge is inspected read-only at
+# activation time.
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -23,11 +23,6 @@ Get-ChildItem $root -Force | ForEach-Object {
   if ($exclude -contains $_.Name) { return }
   Copy-Item $_.FullName (Join-Path $stage $_.Name) -Recurse -Force
 }
-
-# The app author needs the exact renderer bridge. It is reference material
-# inside the package; the plugin itself does not import it.
-New-Item -ItemType Directory -Force (Join-Path $stage 'patch') | Out-Null
-Copy-Item (Join-Path $root 'bridge\we-background.js') (Join-Path $stage 'patch\we-background.js') -Force
 
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal

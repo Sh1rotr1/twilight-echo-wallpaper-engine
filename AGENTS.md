@@ -6,8 +6,9 @@
 
 Twilight Echo（Electron 音乐播放器）的 Wallpaper Engine 动态背景插件。
 
-- 插件侧：扫描本机 WE 壁纸，起本地媒体服务，提供外观页设置块。
-- 本体侧：只替换一个 `resources/app.asar`，注入 `out/renderer/we-background.js`，把页面固定在最底层。
+- 插件侧：扫描本机 WE 壁纸，起本地媒体服务 `127.0.0.1:3100`，提供设置面板。
+- 本体侧：**不改**。Twilight Echo 2.0.2 自带 `out/renderer/we-background.js`（v5）和
+  `index.html` 入口 / CSP。插件只读检查桥版本，按能力启用功能。
 - 场景壁纸：`/scene-live` + WebWallGL 3.x 实时渲染，不用旧 manifest/scene-player 路线。
 
 ## 不要改的东西
@@ -17,76 +18,60 @@ Twilight Echo（Electron 音乐播放器）的 Wallpaper Engine 动态背景插�
 - 不要重新引入旧的 `scene-manifest` / `scene-resource` / 旧 `scene-player` 作为主路径。
 - 不要调用 `wallpaper32.exe` / `wallpaper64.exe`，不要改系统桌面壁纸。
 - 不要把壁纸音轨接入播放器；视频和网页都必须静音。
-- 壁纸属性（`project.json general.properties`，WE 用户属性）要保留检测、动态控件、条件显隐、按壁纸存覆盖值；覆盖值在插件设置 `userProps` 里，不要改成只存在内存。
+- 壁纸属性（`project.json general.properties`）要保留检测、动态控件、条件显隐、按壁纸存覆盖值；
+  覆盖值在插件设置 `userProps` 里，不要改成只存在内存。
 - 壁纸属性只对**已应用**的壁纸显示和生效；切换下拉候选不能加载/预览属性，点“应用”后再加载。
 - 壁纸属性调整必须实时：桥用 `postMessage({type:'te-prop'})` 直推 iframe，不能只靠轮询或“应用”按钮。
-- 轮播状态在 `playlist`，触发方式 `trigger` 只能二选一（`timer` / `page`）；切换必须复用 `applyWallpaper(item, { keepPaused: true })`，不要另写渲染路径。
-- 切页触发依赖宿主导航的 `.menu-item[aria-current="page"]` + `data-page-id` 与 `.playing-music`；本体升级若改导航结构，需同步校准 `pageSignature()`。
+- **不要重新引入宿主补丁 / 自动打桥**。3.0.0 起插件对 `app.asar` 只读；桥能力由
+  `lib/host-bridge.mjs` 判断。
+- 轮播相关代码只允许在 `hostBridge.mode === 'enhanced'`（桥 ≥ v9）时出现；v5 原生模式不得显示
+  轮播字段、不得启动定时器、不得执行“下一张”。
+- 切页触发依赖宿主桥采样 `.menu-item[aria-current="page"]` + `data-page-id` 与 `.playing-music`；
+  v5 桥没有这段逻辑，插件侧无法补。
 
 ## 快速命令
 
 ```powershell
-# 只检查当前安装是否兼容（只读）
+# 只读检查当前安装是否兼容
 node scripts/check-compat.mjs "D:\TwilightEcho"
 
-# 只打桥（无需 npm；用 Twilight Echo 自带 node；也可直接双击 add-bridge.cmd）
-"D:\TwilightEcho\resources\core-node\runtime\node.exe" lib/bridge-adapt.mjs --app "D:\TwilightEcho"
-
-# 打桥 + 安装插件（旧流程，需 @electron/asar）
-node bridge/install.mjs "D:\TwilightEcho"
-
-# 还原本体
-Copy-Item "D:\TwilightEcho\resources\app.asar.te-we-backup" "D:\TwilightEcho\resources\app.asar" -Force
+# 构建 .tep
+npm run build:tep
 ```
 
 ## 关键路径
 
 ```text
 plugin.json                      插件清单（apiVersion 3）
-index.mjs                        宿主侧：扫描、HTTP 服务、设置面板
+index.mjs                        宿主侧：扫描、HTTP 服务、设置面板、桥能力判断
+lib/host-bridge.mjs              只读读取 app.asar 内的桥版本（不写）
+lib/asar-lite.cjs                自带 asar 读取（无 npm 依赖）
 lib/webwallgl/                   WebWallGL 适配页 + 引擎
-lib/we-props.js                 壁纸属性解析（DSH 同款）
-lib/scene-manifest.js           旧场景解析（兼容保留）
-lib/scene-player.js             旧场景播放器（兼容保留）
-lib/bridge-adapt.mjs            宿主桥自愈 / 手动打桥（自带 asar 读写）
-lib/asar-lite.cjs               自带 asar 读写（无 npm 依赖）
-lib/vendor-jpeg-js/             旧场景 JPEG 解码
-bridge/we-background.js          注入到 app.asar 的渲染桥
-bridge/install.mjs               单文件本体补丁 + 插件安装
-COMPATIBILITY.json               机器可读的版本/补丁点/路由
+lib/we-props.js                  壁纸属性解析
+lib/scene-manifest.js            旧场景解析（兼容保留）
+lib/scene-player.js              旧场景播放器（兼容保留）
+lib/vendor-jpeg-js/              旧场景 JPEG 解码
+COMPATIBILITY.json               机器可读的版本/模式/路由
 docs/ARCHITECTURE.md             数据流和状态字段
-docs/ADAPTING.md                 Twilight Echo 升级后的适配步骤
-docs/HOST-BRIDGE.md              使用者手动添加宿主桥的教学
+docs/ADAPTING.md                 宿主升级后的检查步骤
 ```
 
-## 本体补丁点（升级时最可能变的地方）
+## 宿主能力判断（升级时先看这里）
 
-1. `out/renderer/index.html`
-   - 注入 `<script type="module" src="./we-background.js"></script>`
-   - meta CSP 放行 `http://127.0.0.1:3100`
-2. `out/main/index.js`
-   - 响应头 CSP 的 `frame-src` / `img-src` / `media-src`
-   - 安装器按**指令名**匹配，不写死旧字符串；新版本 `frame-src 'self' plugin-ui:` 已适配
-3. `out/renderer/we-background.js`
-   - 新文件；不属于原包
-   - 文件内 `var BRIDGE_VERSION = 9`：宿主桥 < 9 时安装器会覆盖；改桥必须同步升这个号
-4. 备份
-   - `resources/app.asar.te-we-backup` 必须是**当前版本原包**；升级后安装器会刷新
-
-## 升级适配清单
-
-1. 看 `TwilightEcho.exe` / `app.asar` 时间与 `package.json` 版本。
-2. 跑 `scripts/check-compat.mjs`，看 `issues`。
-3. 解包检查 `out/renderer/index.html` 与 `out/main/index.js` 的 CSP、入口资源名。
-4. 检查外观页文案 `背景与材质` 是否还在；`we-background.js` 靠它插入设置块。
-5. 检查 `out/renderer/assets/*.css` 是否仍有 `.app-background-layer`、`.settings-overlay-root`、`te-settings-surface`。
-6. 跑 `bridge/install.mjs`，启动应用。
-7. 验证：外观设置块、视频、网页、场景（WebWallGL）、X/Y/Z 实时、缩放、静音。
-8. 更新 `COMPATIBILITY.json` 的 `host.tested` 与 `CHANGELOG.md`。
+1. `out/renderer/we-background.js` 的 `BRIDGE_VERSION`：
+   - `>= 9`：增强模式，轮播字段 + 切页 + 淡入可用；
+   - `5..8`：原生模式，只保留壁纸/属性/迷你/播放页；
+   - `< 5` 或无文件：不支持，插件不工作，不要尝试修改本体。
+2. `out/renderer/index.html` 必须有 `./we-background.js` 入口和 3100 的 meta CSP。
+3. 主进程 CSP 的 `frame-src` / `img-src` / `media-src` / `connect-src` 必须放行 3100。
+4. 外观页文案 `背景与材质` 仍是桥的插入锚点；若宿主同时存在另一个同名分类，
+   卡片可能挂到外观页分类栏（宿主桥逻辑，插件侧无解）。
+5. 跑 `scripts/check-compat.mjs`，看 `bridgeMode` / `issues`。
+6. 启动应用，按 `docs/ADAPTING.md` 做真实 UI 验收。
 
 ## 已知边界
 
 - 场景由 WebWallGL 重写渲染，复杂自定义 shader / 脚本仍可能与 WE 本体有差异。
-- 本体更新会覆盖 `app.asar`，每次更新后都要重跑安装器。
-- `scripts/check-compat.mjs` 依赖 `@electron/asar`；在源码工作区运行，不要假设已安装插件目录里有它。
+- 宿主升级会覆盖 `app.asar`，但本插件不需要、也不会重打补丁；桥回退到 v5 时轮播自动消失。
+- `scripts/check-compat.mjs` 依赖 `@electron/asar`；在源码工作区运行，不要假设插件安装目录里有它。
 - 插件是信任式安装：`main` 运行在 utilityProcess，拥有与本机同级的文件访问能力。

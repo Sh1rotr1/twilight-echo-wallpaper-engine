@@ -54,7 +54,7 @@ node ..\Twilight_Echo\packages\create-twilight-plugin\bin\create-twilight-plugin
 Output:
 
 ```text
-dist/com.twilightecho.tool.wallpaper-engine-2.1.3.tep
+dist/com.twilightecho.tool.wallpaper-engine-3.0.0.tep
 ```
 
 The official packer validates `plugin.json`, requires a JS `main`, and excludes `node_modules`, `.git`, and `dist`.
@@ -64,14 +64,14 @@ The official packer validates `plugin.json`, requires a JS `main`, and excludes 
 Create a GitHub Release:
 
 ```text
-Tag: v2.1.3
-Title: 2.1.3
+Tag: v3.0.0
+Title: 3.0.0
 ```
 
 The release body is read from:
 
 ```text
-docs/releases/v2.1.3.md
+docs/releases/v3.0.0.md
 ```
 
 Write the actual update content there before tagging. Do not rely on auto-generated "Full Changelog" text.
@@ -79,7 +79,7 @@ Write the actual update content there before tagging. Do not rely on auto-genera
 Attach exactly one file:
 
 ```text
-com.twilightecho.tool.wallpaper-engine-2.1.3.tep
+com.twilightecho.tool.wallpaper-engine-3.0.0.tep
 ```
 
 Do not attach several `.tep` files.
@@ -110,6 +110,7 @@ https://github.com/Px-asen/Twilight-Echo-plugins/blob/main/plugins.json
 
 The plugin package itself must not modify Twilight Echo's application files.
 
-This repository includes `bridge/we-background.js` and `bridge/install.mjs` as development/reference material. The release `.tep` installs the plugin into `userData/plugins/<id>/<version>/`; the renderer bridge must be integrated by the Twilight Echo maintainer, as described in `docs/TE-PATCH.md`.
-
-Users installing only the `.tep` will get the plugin and its HTTP service, but the background layer appears only after the host includes the bridge.
+3.0.0 removed the host bridge patch tooling entirely. The release `.tep` only installs the plugin into
+`userData/plugins/<id>/<version>/`. At activation the plugin reads the host's
+`out/renderer/we-background.js` version and enables native (v5) or enhanced (v9+) features accordingly.
+Twilight Echo 2.0.2 ships the native v5 bridge; no host change is needed.

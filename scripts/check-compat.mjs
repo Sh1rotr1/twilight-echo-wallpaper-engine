@@ -1,21 +1,22 @@
 #!/usr/bin/env node
 /**
- * 只读兼容性检查。
+ * 只读兼容性检查（3.x 原生模式）。
  *
  *   node scripts/check-compat.mjs "D:\TwilightEcho"
  *
- * 输出 JSON。不做任何写入；升级/安装前先跑一遍。
+ * 3.0.0 起插件不再修改 resources/app.asar：这里只检查宿主是否自带可用的
+ * 渲染桥、CSP 与外观锚点，并区分原生模式（v5）与增强模式（v9+）。
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const appDir = path.resolve(process.argv[2] || 'D:\\TwilightEcho')
 const asarPath = path.join(appDir, 'resources', 'app.asar')
-const backupPath = `${asarPath}.te-we-backup`
 const ORIGIN = 'http://127.0.0.1:3100'
+const NATIVE_BRIDGE_VERSION = 5
+const ENHANCED_BRIDGE_VERSION = 9
 
 function fail(error) {
   console.log(JSON.stringify({ ok: false, error: String(error?.message || error) }, null, 2))
@@ -27,7 +28,7 @@ if (!fs.existsSync(asarPath)) fail(`找不到 ${asarPath}`)
 let asar
 try {
   asar = await import('@electron/asar')
-} catch (error) {
+} catch {
   fail('缺少 @electron/asar；请在插件源码工作区运行，或先 npm i @electron/asar')
 }
 
@@ -63,26 +64,30 @@ function directiveHasOrigin(value) {
   return Boolean(value && (value.includes(ORIGIN) || value.includes('${WALLPAPER_ENGINE_ORIGIN}')))
 }
 
+const compatibility = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(HERE, '..', 'COMPATIBILITY.json'), 'utf8')) }
+  catch { return null }
+})()
+
 const pkg = readJson(asarPath, 'package.json') || {}
 const index = read(asarPath, 'out/renderer/index.html') || ''
 const main = read(asarPath, 'out/main/index.js') || ''
+const bridgeText = read(asarPath, 'out/renderer/we-background.js') || ''
+const bridgeInstalled = index.includes('we-background.js') && Boolean(bridgeText)
+const bridgeVersion = Number((bridgeText.match(/BRIDGE_VERSION\s*=\s*(\d+)/) || [])[1] || 0)
+const bridgeMode = !bridgeInstalled
+  ? 'missing'
+  : bridgeVersion >= ENHANCED_BRIDGE_VERSION
+    ? 'enhanced'
+    : bridgeVersion >= NATIVE_BRIDGE_VERSION
+      ? 'native'
+      : 'unsupported'
+const bridgeNativeReady = bridgeMode === 'native' || bridgeMode === 'enhanced'
+const carouselAvailable = bridgeMode === 'enhanced'
+
 const frame = pickDirective(main, 'frame-src')
 const img = pickDirective(main, 'img-src')
 const media = pickDirective(main, 'media-src')
-
-const bridgeInstalled = index.includes('we-background.js')
-const bridgeText = read(asarPath, 'out/renderer/we-background.js') || ''
-const bridgeVersion = Number((bridgeText.match(/BRIDGE_VERSION\s*=\s*(\d+)/) || [])[1] || 0)
-// 以插件自带桥（patch/we-background.js）的版本号为唯一基准：宿主桥低于它就必须重跑安装器。
-const shippedBridgeText = (() => {
-  try { return fs.readFileSync(path.join(HERE, '..', 'patch', 'we-background.js'), 'utf8') }
-  catch { return '' }
-})()
-const REQUIRED_BRIDGE_VERSION = Number((shippedBridgeText.match(/BRIDGE_VERSION\s*=\s*(\d+)/) || [])[1] || 5)
-const bridgeHostIntegrated = bridgeText.includes('securitypolicyviolation') && bridgeText.includes('playbackStatus')
-const bridgeFeaturesIntegrated = bridgeText.includes('te-we-mini-cover') && bridgeText.includes('data-te-lyric-invert')
-const bridgePlaybackIntegrated = bridgeText.includes('data-te-playback-bg')
-const bridgeFresh = bridgeVersion >= REQUIRED_BRIDGE_VERSION
 const indexCsp = index.includes(ORIGIN)
 const csp = {
   frame,
@@ -112,65 +117,45 @@ for (const entry of cssAssets) {
   if (text.includes('te-settings-surface')) cssHooks.settingsSurface = true
 }
 
-const backup = fs.existsSync(backupPath) ? readJson(backupPath, 'package.json') : null
-const backupVersion = backup?.version || null
-
-const compatibility = (() => {
-  try { return JSON.parse(fs.readFileSync(path.join(HERE, '..', 'COMPATIBILITY.json'), 'utf8')) }
-  catch { return null }
-})()
-const tested = compatibility?.host?.tested || []
-const testedMatch = tested.includes(pkg.version)
-
-let pluginInstalled = null
-try {
-  const statePath = path.join(process.env.APPDATA || '', 'TwilightEcho', 'plugin-state.json')
-  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
-  pluginInstalled = state?.['com.twilightecho.tool.wallpaper-engine']?.activeVersion || null
-} catch { /* ignore */ }
-
+const tested = Array.isArray(compatibility?.host?.tested) ? compatibility.host.tested : []
+const appVersion = String(pkg.version || '')
+const testedMatch = tested.includes(appVersion)
 const issues = []
-if (!pkg.version) issues.push('无法读取 app.asar/package.json 版本')
-if (!bridgeInstalled) issues.push('渲染桥未安装（升级后需要重跑 bridge/install.mjs）')
-else if (!bridgeFresh) issues.push(`渲染桥 v${bridgeVersion || 'legacy'} < v${REQUIRED_BRIDGE_VERSION}，需要重跑 bridge/install.mjs（播放页背景与迷你播放器依赖 v5）`)
-if (!indexCsp) issues.push('index.html meta CSP 未放行 127.0.0.1:3100')
-if (!csp.frameOk) issues.push('main frame-src 未放行 127.0.0.1:3100')
-if (!csp.imgOk) issues.push('main img-src 未放行 127.0.0.1:3100')
-if (!csp.mediaOk) issues.push('main media-src 未放行 127.0.0.1:3100')
-if (!appearanceAnchor) issues.push('SettingsPage 中找不到“背景与材质”，外观设置块不会插入')
-if (!cssHooks.appBackgroundLayer) issues.push('CSS 缺少 .app-background-layer 钩子')
-if (!cssHooks.settingsOverlayRoot) issues.push('CSS 缺少 .settings-overlay-root 钩子')
-if (!cssHooks.settingsSurface) issues.push('CSS 缺少 te-settings-surface 钩子')
-if (!backupVersion) issues.push('缺少 app.asar.te-we-backup 备份')
-
+if (!bridgeInstalled) issues.push('宿主未提供 out/renderer/we-background.js（需要 Twilight Echo 2.0.0+ 官方桥）')
+if (!bridgeNativeReady && bridgeInstalled) issues.push(`渲染桥 v${bridgeVersion || 'legacy'} < v${NATIVE_BRIDGE_VERSION}，本插件不支持`)
+if (!indexCsp) issues.push('out/renderer/index.html 未放行 http://127.0.0.1:3100')
+if (!csp.frameOk) issues.push('主进程 CSP 的 frame-src 未放行 127.0.0.1:3100')
+if (!csp.imgOk) issues.push('主进程 CSP 的 img-src 未放行 127.0.0.1:3100')
+if (!csp.mediaOk) issues.push('主进程 CSP 的 media-src 未放行 127.0.0.1:3100')
 const warnings = []
-if (!testedMatch) warnings.push(`当前版本 ${pkg.version} 不在 tested 列表（${tested.join(', ')}），需要人工回归`)
-if (backupVersion && pkg.version && backupVersion !== pkg.version) {
-  warnings.push(`备份版本 ${backupVersion} 与当前版本 ${pkg.version} 不一致`)
-}
+if (!testedMatch) warnings.push(`当前版本 ${appVersion || '?'} 不在 tested 列表（${tested.join(', ') || '空'}），建议人工回归`)
+if (bridgeNativeReady && !carouselAvailable) warnings.push('原生 v5 桥：轮播不可用（需要 v9+ 增强桥）')
 
-console.log(JSON.stringify({
+const result = {
   ok: issues.length === 0,
   appDir,
-  appVersion: pkg.version || null,
+  appVersion,
   tested,
   testedMatch,
   bridgeInstalled,
   bridgeVersion,
-  requiredBridgeVersion: REQUIRED_BRIDGE_VERSION,
-  bridgeFresh,
-  bridgeHostIntegrated,
-  bridgeFeaturesIntegrated,
-  bridgePlaybackIntegrated,
+  bridgeMode,
+  nativeBridgeVersion: NATIVE_BRIDGE_VERSION,
+  enhancedBridgeVersion: ENHANCED_BRIDGE_VERSION,
+  bridgeNativeReady,
+  carouselAvailable,
   indexCsp,
   csp,
   appearanceAnchor,
   cssHooks,
-  backup: { exists: Boolean(backupVersion), version: backupVersion, matches: backupVersion === pkg.version },
-  pluginInstalled,
-  needsInstall: !bridgeInstalled || !bridgeFresh,
+  hostShell: {
+    appBackgroundLayer: cssHooks.appBackgroundLayer,
+    settingsOverlayRoot: cssHooks.settingsOverlayRoot,
+    settingsSurface: cssHooks.settingsSurface
+  },
   issues,
   warnings
-}, null, 2))
+}
 
-process.exit(issues.length === 0 ? 0 : 1)
+console.log(JSON.stringify(result, null, 2))
+process.exit(result.ok ? 0 : 1)

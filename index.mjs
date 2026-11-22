@@ -6,7 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { extractSceneVideo, buildSceneManifest, buildSceneManifestFromDir, extractSceneResource, extractSceneResourceFromDir, decodePngToRgba, encodePng } from './lib/scene-manifest.js'
 import { parseUserPropDefs, filterKnownOverrides, entryDirPrefix } from './lib/we-props.js'
-import { ensureBridgeAdapt } from './lib/bridge-adapt.mjs'
+import { inspectHostBridge } from './lib/host-bridge.mjs'
 import { WE_SCENE_PLAYER_HTML } from './lib/scene-player.js'
 
 const WE_APPID = '431960'
@@ -57,6 +57,14 @@ const DEFAULT_STATE = {
 
 let context = null
 let state = { ...DEFAULT_STATE }
+let hostBridge = {
+  appDir: null,
+  hostVersion: null,
+  mode: 'unknown',
+  bridgeVersion: 0,
+  entry: false,
+  csp: false
+}
 let cache = { at: 0, items: [] }
 let autoApplyTimer = null
 const sceneJobs = new Set()
@@ -1159,8 +1167,14 @@ async function playlistTick() {
   }
 }
 
+// 轮播依赖宿主桥 v9（定时轮询换图在 v5 也能跑，但 v5 没有列表/切页 UI，
+// 官方 2.0.2 桥只有 v5；在原生模式下不启动轮播，避免“看不见的自动换图”。
+function carouselSupported() {
+  return hostBridge.mode === 'enhanced'
+}
+
 function startPlaylistTimer() {
-  if (playlistTimer) return
+  if (playlistTimer || !carouselSupported()) return
   playlistTimer = setInterval(() => {
     playlistTick().catch((error) => log('warn', `轮播失败：${error?.message || error}`))
   }, 15_000)
@@ -1233,13 +1247,18 @@ function buildForm(noticeOverride) {
   if (options.length === 0) options = [{ label: '（没有匹配的壁纸，请修改筛选或扫描目录）', value: '' }]
   const current = options.some((option) => option.value === state.selected) ? state.selected : options[0].value
   const weDir = findWeInstall()
+  const bridgeLabel = hostBridge.bridgeVersion
+    ? `宿主桥 v${hostBridge.bridgeVersion}（${hostBridge.mode === 'enhanced' ? '增强' : '原生'}）`
+    : '宿主桥未识别'
   const notice = noticeOverride
     ? String(noticeOverride).slice(0, 500)
     : [
         weDir ? `WE: ${weDir}` : '未找到 Wallpaper Engine',
         `共 ${items.length} 张，匹配 ${filtered.length} 张${filtered.length > MAX_SELECT_OPTIONS ? `（仅显示前 ${MAX_SELECT_OPTIONS} 张）` : ''}`,
-        '壁纸与原画/1080P/720P、填充/暗化在 外观 → 动态壁纸 选择',
-        '轮播列表与节奏也在 外观 → 动态壁纸 卡片里设置'
+        `${bridgeLabel}；画质/填充/暗化/位移/缩放在 外观 → 背景与材质 → 动态壁纸 卡片`,
+        carouselSupported()
+          ? '轮播列表与节奏也在 外观 → 动态壁纸 卡片里设置'
+          : '当前宿主桥不支持轮播（需要 v9 增强桥；官方 2.0.2 内置 v5）'
       ].join('\n')
   return {
     kind: 'settings-form',
@@ -1256,7 +1275,7 @@ function buildForm(noticeOverride) {
         options: [
           { label: '应用', value: 'apply' },
           { label: '仅刷新列表', value: 'refresh' },
-          { label: '下一张（轮播）', value: 'next' },
+          ...(carouselSupported() ? [{ label: '下一张（轮播）', value: 'next' }] : []),
           { label: '暂停', value: 'pause' },
           { label: '继续', value: 'resume' },
           { label: '关闭动态壁纸', value: 'stop' }
@@ -1293,33 +1312,37 @@ function buildForm(noticeOverride) {
           { label: '关闭', value: 'off' }
         ]
       },
-      {
-        key: 'carousel',
-        label: '壁纸轮播',
-        type: 'select',
-        value: state.playlist.enabled ? 'on' : 'off',
-        options: [
-          { label: '开启', value: 'on' },
-          { label: '关闭', value: 'off' }
-        ]
-      },
-      {
-        key: 'carouselInterval',
-        label: '轮播间隔',
-        type: 'select',
-        value: String(state.playlist.intervalMin),
-        options: [1, 5, 10, 15, 30, 60, 120].map((minutes) => ({ label: `${minutes} 分钟`, value: String(minutes) }))
-      },
-      {
-        key: 'carouselTrigger',
-        label: '轮播方式（二选一）',
-        type: 'select',
-        value: state.playlist.trigger,
-        options: [
-          { label: '按时间', value: 'timer' },
-          { label: '切换页面时', value: 'page' }
-        ]
-      }
+      ...(carouselSupported()
+        ? [
+            {
+              key: 'carousel',
+              label: '壁纸轮播',
+              type: 'select',
+              value: state.playlist.enabled ? 'on' : 'off',
+              options: [
+                { label: '开启', value: 'on' },
+                { label: '关闭', value: 'off' }
+              ]
+            },
+            {
+              key: 'carouselInterval',
+              label: '轮播间隔',
+              type: 'select',
+              value: String(state.playlist.intervalMin),
+              options: [1, 5, 10, 15, 30, 60, 120].map((minutes) => ({ label: `${minutes} 分钟`, value: String(minutes) }))
+            },
+            {
+              key: 'carouselTrigger',
+              label: '轮播方式（二选一）',
+              type: 'select',
+              value: state.playlist.trigger,
+              options: [
+                { label: '按时间', value: 'timer' },
+                { label: '切换页面时', value: 'page' }
+              ]
+            }
+          ]
+        : [])
     ]
   }
 }
@@ -1328,7 +1351,20 @@ function buildForm(noticeOverride) {
 
 export async function activate(ctx) {
   context = ctx
+  hostBridge = inspectHostBridge()
+  log('info', `[host-bridge] Twilight Echo ${hostBridge.hostVersion || '?'} · 渲染桥 v${hostBridge.bridgeVersion || 0}（${hostBridge.mode}）`)
   await loadState()
+  if (!carouselSupported()) {
+    // v5 宿主桥没有轮播入口；把旧数据保留，但停止自动换图，避免用户无法关闭。
+    const wasEnabled = state.playlist.enabled === true
+    state.playlist.enabled = false
+    state.playlist.trigger = 'timer'
+    state.playlistNextAt = 0
+    if (wasEnabled) {
+      log('info', '[carousel] 宿主桥低于 v9，轮播已暂停（数据保留）')
+      await persist()
+    }
+  }
   scanWallpapers(true)
   ensureServer()
   startPlaylistTimer()
@@ -1348,21 +1384,6 @@ export async function activate(ctx) {
 
   context.twilight.ui.onCommand('we.settings', async () => buildForm())
 
-  // 本体更新后 we-background.js 会退回 v5：这里只读检查，缺了就排队，
-  // 真正改 app.asar 由 lib/bridge-adapt.mjs 在应用退出后执行。
-  setTimeout(() => {
-    try {
-      const result = ensureBridgeAdapt({
-        logger: { info: (m) => log('info', m), debug: (m) => log('debug', m), warn: (m) => log('warn', m) }
-      })
-      if (result?.status === 'queued') {
-        void notify('info', '宿主已更新：动态壁纸背景将在退出 Twilight Echo 后自动恢复（已排队）。')
-      }
-    } catch (error) {
-      log('warn', `[bridge-adapt] 检查失败：${error?.message || error}`)
-    }
-  }, 2500)
-
   context.twilight.ui.onCommand('we.settings.save', async (values = {}) => {
     if (values.q != null) state.q = String(values.q).slice(0, 120)
     if (values.extraDir != null) state.extraDir = String(values.extraDir).slice(0, 500)
@@ -1370,17 +1391,19 @@ export async function activate(ctx) {
     if (values.autoApply != null) state.autoApply = String(values.autoApply) === 'off' ? 'off' : 'on'
     if (values.miniCover != null) state.miniCover = String(values.miniCover) !== 'off'
     if (values.playbackBg != null) state.playbackBg = String(values.playbackBg) !== 'off'
-    if (values.carousel != null) state.playlist.enabled = String(values.carousel) === 'on'
-    if (values.carouselInterval != null) {
-      state.playlist.intervalMin = Math.max(1, Math.min(120, Number(values.carouselInterval) || 15))
-      if (state.playlist.trigger === 'timer') state.playlistNextAt = Date.now() + playlistIntervalMs()
-    }
-    if (values.carouselTrigger != null) {
-      state.playlist.trigger = String(values.carouselTrigger) === 'page' ? 'page' : 'timer'
-      state.playlistNextAt = state.playlist.trigger === 'timer' ? Date.now() + playlistIntervalMs() : 0
-    }
-    if (state.playlist.enabled && !state.playlistNextAt && state.playlist.trigger === 'timer') {
-      state.playlistNextAt = Date.now() + playlistIntervalMs()
+    if (carouselSupported()) {
+      if (values.carousel != null) state.playlist.enabled = String(values.carousel) === 'on'
+      if (values.carouselInterval != null) {
+        state.playlist.intervalMin = Math.max(1, Math.min(120, Number(values.carouselInterval) || 15))
+        if (state.playlist.trigger === 'timer') state.playlistNextAt = Date.now() + playlistIntervalMs()
+      }
+      if (values.carouselTrigger != null) {
+        state.playlist.trigger = String(values.carouselTrigger) === 'page' ? 'page' : 'timer'
+        state.playlistNextAt = state.playlist.trigger === 'timer' ? Date.now() + playlistIntervalMs() : 0
+      }
+      if (state.playlist.enabled && !state.playlistNextAt && state.playlist.trigger === 'timer') {
+        state.playlistNextAt = Date.now() + playlistIntervalMs()
+      }
     }
     if (values.wallpaper) state.selected = String(values.wallpaper)
     await persist()
@@ -1400,6 +1423,7 @@ export async function activate(ctx) {
         await persist()
         message = '已暂停'
       } else if (action === 'next') {
+        if (!carouselSupported()) throw new Error('当前宿主桥不支持轮播（需要 v9 增强桥）')
         const item = await advancePlaylist('panel')
         message = item ? `已换到：${item.title}` : '轮播至少需要 2 张可用壁纸'
       } else if (action === 'resume') {
