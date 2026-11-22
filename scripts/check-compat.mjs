@@ -4,8 +4,7 @@
  *
  *   node scripts/check-compat.mjs "D:\TwilightEcho"
  *
- * 3.0.0 起插件不再修改 resources/app.asar：这里只检查宿主是否自带可用的
- * 渲染桥、CSP 与外观锚点，并区分原生模式（v5）与增强模式（v9+）。
+ * 插件不修改 resources/app.asar：这里只检查宿主是否自带可用的渲染桥、CSP 与外观锚点。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -16,7 +15,6 @@ const appDir = path.resolve(process.argv[2] || 'D:\\TwilightEcho')
 const asarPath = path.join(appDir, 'resources', 'app.asar')
 const ORIGIN = 'http://127.0.0.1:3100'
 const NATIVE_BRIDGE_VERSION = 5
-const ENHANCED_BRIDGE_VERSION = 9
 
 function fail(error) {
   console.log(JSON.stringify({ ok: false, error: String(error?.message || error) }, null, 2))
@@ -77,13 +75,10 @@ const bridgeInstalled = index.includes('we-background.js') && Boolean(bridgeText
 const bridgeVersion = Number((bridgeText.match(/BRIDGE_VERSION\s*=\s*(\d+)/) || [])[1] || 0)
 const bridgeMode = !bridgeInstalled
   ? 'missing'
-  : bridgeVersion >= ENHANCED_BRIDGE_VERSION
-    ? 'enhanced'
-    : bridgeVersion >= NATIVE_BRIDGE_VERSION
-      ? 'native'
-      : 'unsupported'
-const bridgeNativeReady = bridgeMode === 'native' || bridgeMode === 'enhanced'
-const carouselAvailable = bridgeMode === 'enhanced'
+  : bridgeVersion >= NATIVE_BRIDGE_VERSION
+    ? 'native'
+    : 'unsupported'
+const bridgeReady = bridgeMode === 'native'
 
 const frame = pickDirective(main, 'frame-src')
 const img = pickDirective(main, 'img-src')
@@ -122,14 +117,13 @@ const appVersion = String(pkg.version || '')
 const testedMatch = tested.includes(appVersion)
 const issues = []
 if (!bridgeInstalled) issues.push('宿主未提供 out/renderer/we-background.js（需要 Twilight Echo 2.0.0+ 官方桥）')
-if (!bridgeNativeReady && bridgeInstalled) issues.push(`渲染桥 v${bridgeVersion || 'legacy'} < v${NATIVE_BRIDGE_VERSION}，本插件不支持`)
+if (bridgeInstalled && !bridgeReady) issues.push(`渲染桥 v${bridgeVersion || 'legacy'} < v${NATIVE_BRIDGE_VERSION}，本插件不支持`)
 if (!indexCsp) issues.push('out/renderer/index.html 未放行 http://127.0.0.1:3100')
 if (!csp.frameOk) issues.push('主进程 CSP 的 frame-src 未放行 127.0.0.1:3100')
 if (!csp.imgOk) issues.push('主进程 CSP 的 img-src 未放行 127.0.0.1:3100')
 if (!csp.mediaOk) issues.push('主进程 CSP 的 media-src 未放行 127.0.0.1:3100')
 const warnings = []
 if (!testedMatch) warnings.push(`当前版本 ${appVersion || '?'} 不在 tested 列表（${tested.join(', ') || '空'}），建议人工回归`)
-if (bridgeNativeReady && !carouselAvailable) warnings.push('原生 v5 桥：轮播不可用（需要 v9+ 增强桥）')
 
 const result = {
   ok: issues.length === 0,
@@ -141,18 +135,11 @@ const result = {
   bridgeVersion,
   bridgeMode,
   nativeBridgeVersion: NATIVE_BRIDGE_VERSION,
-  enhancedBridgeVersion: ENHANCED_BRIDGE_VERSION,
-  bridgeNativeReady,
-  carouselAvailable,
+  bridgeReady,
   indexCsp,
   csp,
   appearanceAnchor,
   cssHooks,
-  hostShell: {
-    appBackgroundLayer: cssHooks.appBackgroundLayer,
-    settingsOverlayRoot: cssHooks.settingsOverlayRoot,
-    settingsSurface: cssHooks.settingsSurface
-  },
   issues,
   warnings
 }

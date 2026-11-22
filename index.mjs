@@ -13,18 +13,6 @@ const WE_APPID = '431960'
 const CACHE_TTL_MS = 30_000
 const MAX_SELECT_OPTIONS = 30
 
-const DEFAULT_PLAYLIST = {
-  enabled: false,
-  ids: [],
-  trigger: 'timer',
-  intervalMin: 15,
-  pageCooldownSec: 60,
-  order: 'loop',
-  pauseWithPlayer: true,
-  transition: 'fade',
-  fadeMs: 420
-}
-
 const DEFAULT_STATE = {
   q: '',
   selected: '',
@@ -48,11 +36,6 @@ const DEFAULT_STATE = {
   miniCover: true,
   playbackBg: true,
   paused: false,
-  playlist: { ...DEFAULT_PLAYLIST },
-  playlistCursor: 0,
-  playlistNextAt: 0,
-  playlistLastSwitch: 0,
-  hidden: false
 }
 
 let context = null
@@ -458,9 +441,6 @@ function bridgeState() {
     zoom: Number(state.zoom) || 100,
     miniCover: state.miniCover !== false,
     playbackBg: state.playbackBg !== false,
-    fadeMs: state.playlist && state.playlist.transition === 'fade'
-      ? Math.max(0, Math.min(1000, Number(state.playlist.fadeMs) || 420))
-      : 0,
     scene: item.type === 'scene'
   }
   if (item.type === 'video') payload.url = `/media/${item.id}`
@@ -611,161 +591,6 @@ function handleRequest(req, res) {
     })
     return
   }
-  if (pathname === '/api/playlist' && req.method === 'GET') {
-    const ids = playlistValidIds()
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
-    res.end(JSON.stringify({
-      ok: true,
-      playlist: { ...state.playlist, ids: state.playlist.ids.slice() },
-      cursor: Number(state.playlistCursor) || 0,
-      total: ids.length,
-      nextAt: Number(state.playlistNextAt) || 0,
-      lastSwitch: Number(state.playlistLastSwitch) || 0,
-      current: state.selected
-    }))
-    return
-  }
-
-  if (pathname === '/api/playlist' && req.method === 'POST') {
-    let body = ''
-    req.on('data', (chunk) => { body += chunk })
-    req.on('end', async () => {
-      try {
-        const payload = JSON.parse(body || '{}')
-        const p = state.playlist
-        const wasEnabled = p.enabled === true
-        if (Array.isArray(payload.ids)) {
-          const seen = new Set()
-          const ids = []
-          for (const id of payload.ids) {
-            if (typeof id !== 'string' || !/^[a-f0-9]{16}$/.test(id)) continue
-            if (seen.has(id)) continue
-            seen.add(id)
-            ids.push(id)
-            if (ids.length >= 200) break
-          }
-          p.ids = ids
-          state.playlistCursor = Math.max(0, Math.min(Number(state.playlistCursor) || 0, Math.max(0, ids.length - 1)))
-        }
-        if (typeof payload.enabled === 'boolean') p.enabled = payload.enabled
-        if (payload.intervalMin != null) p.intervalMin = Math.max(1, Math.min(120, Number(payload.intervalMin) || 15))
-        if (payload.trigger === 'timer' || payload.trigger === 'page') p.trigger = payload.trigger
-        if (payload.pageCooldownSec != null) p.pageCooldownSec = Math.max(5, Math.min(600, Number(payload.pageCooldownSec) || 60))
-        if (payload.order === 'loop' || payload.order === 'shuffle') p.order = payload.order
-        if (typeof payload.pauseWithPlayer === 'boolean') p.pauseWithPlayer = payload.pauseWithPlayer
-        if (payload.transition === 'cut' || payload.transition === 'fade') p.transition = payload.transition
-        if (payload.fadeMs != null) {
-          p.fadeMs = Math.max(0, Math.min(1000, Number(payload.fadeMs) || 420))
-          p.transition = p.fadeMs === 0 ? 'cut' : 'fade'
-        }
-        if (p.trigger === 'page') {
-          state.playlistNextAt = 0
-        } else if (p.enabled && (!wasEnabled || payload.intervalMin != null || payload.trigger != null)) {
-          state.playlistNextAt = Date.now() + playlistIntervalMs()
-        }
-        if (!p.enabled) state.playlistNextAt = 0
-        await persist()
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({
-          ok: true,
-          playlist: { ...p, ids: p.ids.slice() },
-          nextAt: Number(state.playlistNextAt) || 0,
-          total: playlistValidIds().length
-        }))
-      } catch (error) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: false, error: error?.message || String(error) }))
-      }
-    })
-    return
-  }
-
-  if (pathname === '/api/playlist/action' && req.method === 'POST') {
-    let body = ''
-    req.on('data', (chunk) => { body += chunk })
-    req.on('end', async () => {
-      try {
-        const payload = JSON.parse(body || '{}')
-        const action = String(payload.action || '')
-        const p = state.playlist
-        if (action === 'pause') {
-          p.enabled = false
-          state.playlistNextAt = 0
-          await persist()
-        } else if (action === 'resume') {
-          p.enabled = true
-          state.playlistNextAt = Date.now() + playlistIntervalMs()
-          await persist()
-        } else if (action === 'next') {
-          await advancePlaylist('manual')
-        } else if (action === 'prev') {
-          const ids = playlistValidIds()
-          if (ids.length > 1) {
-            const item = findWallpaper(pickPlaylistId(-1), true)
-            if (item) {
-              await applyWallpaper(item, { keepPaused: true })
-              state.playlistLastSwitch = Date.now()
-              state.playlistNextAt = Date.now() + playlistIntervalMs()
-              await persist()
-            }
-          }
-        } else {
-          throw new Error('未知轮播操作')
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: true, state: bridgeState(), playlist: { ...p, ids: p.ids.slice() }, nextAt: Number(state.playlistNextAt) || 0 }))
-      } catch (error) {
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: false, error: error?.message || String(error) }))
-      }
-    })
-    return
-  }
-
-  if (pathname === '/api/playlist/page' && req.method === 'POST') {
-    let body = ''
-    req.on('data', (chunk) => { body += chunk })
-    req.on('end', async () => {
-      const p = state.playlist
-      const skip = (skipped) => {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: false, skipped }))
-      }
-      if (p.enabled !== true || p.trigger !== 'page') return skip('mode')
-      if (state.hidden === true) return skip('hidden')
-      if (state.interactive === true) return skip('interactive')
-      if (p.pauseWithPlayer !== false && state.paused === true) return skip('paused')
-      const cooldown = Math.max(5, Math.min(600, Number(p.pageCooldownSec) || 60)) * 1000
-      const since = Date.now() - (Number(state.playlistLastSwitch) || 0)
-      if (since < cooldown) return skip('cooldown')
-      try {
-        const item = await advancePlaylist('page')
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: Boolean(item), switched: item?.id || '', state: bridgeState() }))
-      } catch (error) {
-        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ ok: false, error: error?.message || String(error) }))
-      }
-    })
-    return
-  }
-
-  if (pathname === '/api/playlist/context' && req.method === 'POST') {
-    let body = ''
-    req.on('data', (chunk) => { body += chunk })
-    req.on('end', () => {
-      try {
-        const payload = JSON.parse(body || '{}')
-        state.hidden = payload.hidden === true || payload.fullscreen === true
-      } catch {
-        state.hidden = false
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ ok: true, hidden: state.hidden === true }))
-    })
-    return
-  }
-
   if ((pathname === '/api/apply' || pathname === '/api/control') && req.method === 'POST') {
     let body = ''
     req.on('data', (chunk) => { body += chunk })
@@ -1085,102 +910,6 @@ async function applyWallpaper(item, options = {}) {
   // 场景由 WebWallGL 在 /scene-live 直接读取 scene.pkg，不再预生成 manifest。
 }
 
-/* --------------------------------- 轮播 ---------------------------------- */
-
-let playlistTimer = null
-
-function playlistIntervalMs() {
-  return Math.max(1, Math.min(120, Number(state.playlist?.intervalMin) || 15)) * 60_000
-}
-
-function playlistValidIds() {
-  const ids = Array.isArray(state.playlist?.ids) ? state.playlist.ids : []
-  return ids.filter((id) => Boolean(findWallpaper(id)))
-}
-
-function prunePlaylist() {
-  if (!Array.isArray(state.playlist?.ids)) { state.playlist.ids = []; return false }
-  const kept = state.playlist.ids.filter((id) => Boolean(findWallpaper(id)))
-  if (kept.length === state.playlist.ids.length) return false
-  state.playlist.ids = kept
-  state.playlistCursor = Math.max(0, Math.min(Number(state.playlistCursor) || 0, Math.max(0, kept.length - 1)))
-  return true
-}
-
-function pickPlaylistId(step = 1) {
-  const ids = playlistValidIds()
-  if (ids.length === 0) return ''
-  if (ids.length === 1) return ids[0]
-  let cursor = Math.max(0, Math.min(Number(state.playlistCursor) || 0, ids.length - 1))
-  if (state.playlist.order === 'shuffle' && step === 1) {
-    let next = cursor
-    while (next === cursor) next = Math.floor(Math.random() * ids.length)
-    cursor = next
-  } else {
-    cursor = (cursor + step + ids.length) % ids.length
-  }
-  state.playlistCursor = cursor
-  return ids[cursor]
-}
-
-async function advancePlaylist(reason = 'manual') {
-  const ids = playlistValidIds()
-  const nextAt = () => (state.playlist.trigger === 'timer' ? Date.now() + playlistIntervalMs() : 0)
-  if (ids.length === 0) return null
-  if (ids.length === 1) {
-    const only = findWallpaper(ids[0], true)
-    if (!only || only.id === state.selected) return null
-    await applyWallpaper(only, { keepPaused: true })
-    state.playlistLastSwitch = Date.now()
-    state.playlistNextAt = nextAt()
-    await persist()
-    return only
-  }
-  const item = findWallpaper(pickPlaylistId(1), true)
-  if (!item) return null
-  await applyWallpaper(item, { keepPaused: true })
-  state.playlistLastSwitch = Date.now()
-  state.playlistNextAt = nextAt()
-  await persist()
-  log('info', `轮播切换（${reason}）：${item.title}`)
-  return item
-}
-
-async function playlistTick() {
-  const playlist = state.playlist
-  if (!playlist || playlist.enabled !== true) return
-  if (playlist.trigger !== 'timer') return
-  if (state.interactive === true) return
-  if (playlist.pauseWithPlayer !== false && state.paused === true) return
-  if (!state.selected) return
-  const now = Date.now()
-  if (!state.playlistNextAt) {
-    state.playlistNextAt = now + playlistIntervalMs()
-    await persist()
-    return
-  }
-  if (now < state.playlistNextAt) return
-  const item = await advancePlaylist('timer')
-  if (!item) {
-    state.playlistNextAt = now + playlistIntervalMs()
-    await persist()
-  }
-}
-
-// 轮播依赖宿主桥 v9（定时轮询换图在 v5 也能跑，但 v5 没有列表/切页 UI，
-// 官方 2.0.2 桥只有 v5；在原生模式下不启动轮播，避免“看不见的自动换图”。
-function carouselSupported() {
-  return hostBridge.mode === 'enhanced'
-}
-
-function startPlaylistTimer() {
-  if (playlistTimer || !carouselSupported()) return
-  playlistTimer = setInterval(() => {
-    playlistTick().catch((error) => log('warn', `轮播失败：${error?.message || error}`))
-  }, 15_000)
-  if (typeof playlistTimer.unref === 'function') playlistTimer.unref()
-}
-
 /* ------------------------------- 应用设置 -------------------------------- */
 
 function appSettingsPath() {
@@ -1212,26 +941,6 @@ async function loadState() {
   } catch {
     state = { ...DEFAULT_STATE }
   }
-  const savedPlaylist = saved?.playlist && typeof saved.playlist === 'object' ? saved.playlist : {}
-  state.playlist = { ...DEFAULT_PLAYLIST, ...savedPlaylist }
-  state.playlist.ids = Array.isArray(state.playlist.ids)
-    ? state.playlist.ids.filter((id) => typeof id === 'string' && /^[a-f0-9]{16}$/.test(id))
-    : []
-  state.playlist.intervalMin = Math.max(1, Math.min(120, Number(state.playlist.intervalMin) || 15))
-  state.playlist.pageCooldownSec = Math.max(5, Math.min(600, Number(state.playlist.pageCooldownSec) || 60))
-  state.playlist.fadeMs = Math.max(0, Math.min(1000, Number(state.playlist.fadeMs) || 420))
-  state.playlist.enabled = state.playlist.enabled === true
-  state.playlist.trigger = state.playlist.trigger === 'page' ? 'page' : 'timer'
-  if (savedPlaylist.byPage === true && savedPlaylist.trigger == null) state.playlist.trigger = 'page'
-  delete state.playlist.byPage
-  state.playlist.pauseWithPlayer = state.playlist.pauseWithPlayer !== false
-  state.playlist.order = state.playlist.order === 'shuffle' ? 'shuffle' : 'loop'
-  state.playlist.transition = state.playlist.transition === 'cut' ? 'cut' : 'fade'
-  state.playlistCursor = Math.max(0, Number(state.playlistCursor) || 0)
-  state.playlistNextAt = Number(state.playlistNextAt) || 0
-  if (state.playlist.trigger === 'page') state.playlistNextAt = 0
-  state.playlistLastSwitch = Number(state.playlistLastSwitch) || 0
-  state.hidden = false
 }
 
 /* --------------------------------- 表单 ---------------------------------- */
@@ -1248,17 +957,14 @@ function buildForm(noticeOverride) {
   const current = options.some((option) => option.value === state.selected) ? state.selected : options[0].value
   const weDir = findWeInstall()
   const bridgeLabel = hostBridge.bridgeVersion
-    ? `宿主桥 v${hostBridge.bridgeVersion}（${hostBridge.mode === 'enhanced' ? '增强' : '原生'}）`
+    ? `宿主桥 v${hostBridge.bridgeVersion}`
     : '宿主桥未识别'
   const notice = noticeOverride
     ? String(noticeOverride).slice(0, 500)
     : [
         weDir ? `WE: ${weDir}` : '未找到 Wallpaper Engine',
         `共 ${items.length} 张，匹配 ${filtered.length} 张${filtered.length > MAX_SELECT_OPTIONS ? `（仅显示前 ${MAX_SELECT_OPTIONS} 张）` : ''}`,
-        `${bridgeLabel}；画质/填充/暗化/位移/缩放在 外观 → 背景与材质 → 动态壁纸 卡片`,
-        carouselSupported()
-          ? '轮播列表与节奏也在 外观 → 动态壁纸 卡片里设置'
-          : '当前宿主桥不支持轮播（需要 v9 增强桥；官方 2.0.2 内置 v5）'
+        `${bridgeLabel}；画质/填充/暗化/位移/缩放在 外观 → 背景与材质 → 动态壁纸 卡片`
       ].join('\n')
   return {
     kind: 'settings-form',
@@ -1275,7 +981,6 @@ function buildForm(noticeOverride) {
         options: [
           { label: '应用', value: 'apply' },
           { label: '仅刷新列表', value: 'refresh' },
-          ...(carouselSupported() ? [{ label: '下一张（轮播）', value: 'next' }] : []),
           { label: '暂停', value: 'pause' },
           { label: '继续', value: 'resume' },
           { label: '关闭动态壁纸', value: 'stop' }
@@ -1312,37 +1017,6 @@ function buildForm(noticeOverride) {
           { label: '关闭', value: 'off' }
         ]
       },
-      ...(carouselSupported()
-        ? [
-            {
-              key: 'carousel',
-              label: '壁纸轮播',
-              type: 'select',
-              value: state.playlist.enabled ? 'on' : 'off',
-              options: [
-                { label: '开启', value: 'on' },
-                { label: '关闭', value: 'off' }
-              ]
-            },
-            {
-              key: 'carouselInterval',
-              label: '轮播间隔',
-              type: 'select',
-              value: String(state.playlist.intervalMin),
-              options: [1, 5, 10, 15, 30, 60, 120].map((minutes) => ({ label: `${minutes} 分钟`, value: String(minutes) }))
-            },
-            {
-              key: 'carouselTrigger',
-              label: '轮播方式（二选一）',
-              type: 'select',
-              value: state.playlist.trigger,
-              options: [
-                { label: '按时间', value: 'timer' },
-                { label: '切换页面时', value: 'page' }
-              ]
-            }
-          ]
-        : [])
     ]
   }
 }
@@ -1354,23 +1028,8 @@ export async function activate(ctx) {
   hostBridge = inspectHostBridge()
   log('info', `[host-bridge] Twilight Echo ${hostBridge.hostVersion || '?'} · 渲染桥 v${hostBridge.bridgeVersion || 0}（${hostBridge.mode}）`)
   await loadState()
-  if (!carouselSupported()) {
-    // v5 宿主桥没有轮播入口；把旧数据保留，但停止自动换图，避免用户无法关闭。
-    const wasEnabled = state.playlist.enabled === true
-    state.playlist.enabled = false
-    state.playlist.trigger = 'timer'
-    state.playlistNextAt = 0
-    if (wasEnabled) {
-      log('info', '[carousel] 宿主桥低于 v9，轮播已暂停（数据保留）')
-      await persist()
-    }
-  }
   scanWallpapers(true)
   ensureServer()
-  startPlaylistTimer()
-  if (state.playlist.enabled && state.playlist.trigger === 'timer' && !state.playlistNextAt) {
-    state.playlistNextAt = Date.now() + playlistIntervalMs()
-  }
 
   await context.twilight.ui.register({
     id: 'we-settings',
@@ -1391,20 +1050,6 @@ export async function activate(ctx) {
     if (values.autoApply != null) state.autoApply = String(values.autoApply) === 'off' ? 'off' : 'on'
     if (values.miniCover != null) state.miniCover = String(values.miniCover) !== 'off'
     if (values.playbackBg != null) state.playbackBg = String(values.playbackBg) !== 'off'
-    if (carouselSupported()) {
-      if (values.carousel != null) state.playlist.enabled = String(values.carousel) === 'on'
-      if (values.carouselInterval != null) {
-        state.playlist.intervalMin = Math.max(1, Math.min(120, Number(values.carouselInterval) || 15))
-        if (state.playlist.trigger === 'timer') state.playlistNextAt = Date.now() + playlistIntervalMs()
-      }
-      if (values.carouselTrigger != null) {
-        state.playlist.trigger = String(values.carouselTrigger) === 'page' ? 'page' : 'timer'
-        state.playlistNextAt = state.playlist.trigger === 'timer' ? Date.now() + playlistIntervalMs() : 0
-      }
-      if (state.playlist.enabled && !state.playlistNextAt && state.playlist.trigger === 'timer') {
-        state.playlistNextAt = Date.now() + playlistIntervalMs()
-      }
-    }
     if (values.wallpaper) state.selected = String(values.wallpaper)
     await persist()
     cache.at = 0
@@ -1422,10 +1067,6 @@ export async function activate(ctx) {
         state.rev = (Number(state.rev) || 0) + 1
         await persist()
         message = '已暂停'
-      } else if (action === 'next') {
-        if (!carouselSupported()) throw new Error('当前宿主桥不支持轮播（需要 v9 增强桥）')
-        const item = await advancePlaylist('panel')
-        message = item ? `已换到：${item.title}` : '轮播至少需要 2 张可用壁纸'
       } else if (action === 'resume') {
         state.paused = false
         state.rev = (Number(state.rev) || 0) + 1
@@ -1468,10 +1109,6 @@ export async function deactivate() {
   if (autoApplyTimer) {
     clearTimeout(autoApplyTimer)
     autoApplyTimer = null
-  }
-  if (playlistTimer) {
-    clearInterval(playlistTimer)
-    playlistTimer = null
   }
   context = null
   cache = { at: 0, items: [] }

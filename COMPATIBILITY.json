@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "plugin": {
     "id": "com.twilightecho.tool.wallpaper-engine",
-    "version": "3.0.0",
+    "version": "3.0.1",
     "apiVersion": 3,
     "engines": ">=2.0.0",
     "permissions": [
@@ -15,44 +15,17 @@
   "host": {
     "name": "TwilightEcho",
     "tested": [
-      "1.3.1",
-      "1.4.0-perview",
-      "1.4.0-preview2",
       "2.0.0",
       "2.0.1",
       "2.0.2"
     ],
     "notes": {
-      "2.0.2": "官方 app.asar 自带 out/renderer/we-background.js（BRIDGE_VERSION 5）+ index.html 入口 + meta CSP 3100；主进程 CSP 经 NCM_API_ORIGINS 放行 connect-src 3100。插件只读检查，不再修改 app.asar。",
-      "2.0.0": "首个稳定内置桥版本；旧版插件曾把桥补丁到 v9，3.0.0 起不再自动打桥。"
+      "2.0.2": "官方 app.asar 自带 out/renderer/we-background.js（BRIDGE_VERSION 5）、index.html 入口与 meta CSP 3100；主进程 CSP 经 NCM_API_ORIGINS 放行 connect-src 3100。插件只读检查，不修改 app.asar。"
     }
   },
-  "modes": {
-    "native": {
-      "bridgeVersion": 5,
-      "description": "官方原生桥：视频/网页/场景、画质/填充/暗化、位移/缩放、壁纸属性、迷你播放器与播放页背景。轮播 UI/切页/淡入不可用。",
-      "features": [
-        "video",
-        "web",
-        "scene",
-        "quality",
-        "fit",
-        "scrim",
-        "layout",
-        "userProps",
-        "miniCover",
-        "playbackBg"
-      ]
-    },
-    "enhanced": {
-      "bridgeVersion": 9,
-      "description": "旧版增强桥（个人/历史补丁）：在 native 基础上增加轮播列表、切页触发和淡入。插件只识别，不主动安装。",
-      "features": [
-        "carousel",
-        "pageTrigger",
-        "fade"
-      ]
-    }
+  "bridge": {
+    "nativeVersion": 5,
+    "detection": "只读读取 resources/app.asar 的 out/renderer/we-background.js 中 BRIDGE_VERSION；不写、不备份、不排队补丁"
   },
   "paths": {
     "appDir": "D:\\TwilightEcho",
@@ -87,11 +60,6 @@
     "POST /api/apply",
     "POST /api/layout",
     "POST /api/control",
-    "GET /api/playlist",
-    "POST /api/playlist",
-    "POST /api/playlist/action",
-    "POST /api/playlist/page",
-    "POST /api/playlist/context",
     "GET /api/props/<id>",
     "POST /api/props",
     "POST /api/props/reset",
@@ -125,17 +93,8 @@
     "zoom",
     "userProps",
     "miniCover",
-    "playbackBg",
-    "playlist",
-    "playlistCursor",
-    "playlistNextAt",
-    "playlistLastSwitch"
+    "playbackBg"
   ],
-  "bridge": {
-    "detection": "只读读取 resources/app.asar 的 out/renderer/we-background.js 中 BRIDGE_VERSION；不写、不备份、不排队补丁",
-    "nativeVersion": 5,
-    "enhancedVersion": 9
-  },
   "scene": {
     "engine": "webwallgl@3.x",
     "adapter": "lib/webwallgl/index.html + renderer.js",
@@ -160,7 +119,6 @@
     "main frame/img/media CSP contains 127.0.0.1:3100",
     "SettingsPage assets contain 背景与材质",
     "CSS contains .app-background-layer/.settings-overlay-root/te-settings-surface",
-    "bridge BRIDGE_VERSION >= 5",
-    "enhanced features require BRIDGE_VERSION >= 9"
+    "bridge BRIDGE_VERSION >= 5"
   ]
 }

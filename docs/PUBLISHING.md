@@ -110,7 +110,7 @@ https://github.com/Px-asen/Twilight-Echo-plugins/blob/main/plugins.json
 
 The plugin package itself must not modify Twilight Echo's application files.
 
-3.0.0 removed the host bridge patch tooling entirely. The release `.tep` only installs the plugin into
+3.0.1 removed the host bridge patch tooling entirely. The release `.tep` only installs the plugin into
 `userData/plugins/<id>/<version>/`. At activation the plugin reads the host's
-`out/renderer/we-background.js` version and enables native (v5) or enhanced (v9+) features accordingly.
-Twilight Echo 2.0.2 ships the native v5 bridge; no host change is needed.
+`out/renderer/we-background.js` version and requires the official v5 bridge.
+Twilight Echo 2.0.2 ships this bridge; no host change is needed.

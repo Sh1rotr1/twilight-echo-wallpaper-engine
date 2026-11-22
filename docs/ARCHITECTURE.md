@@ -29,22 +29,15 @@ Wallpaper Engine 项目
         └─ 场景：<iframe> /scene-live/... → WebWallGL 3.x
 ```
 
-3.0.0 起插件**不写宿主**。`lib/host-bridge.mjs` 只读 `resources/app.asar` 的
-`out/renderer/we-background.js`，把 `BRIDGE_VERSION` 映射成能力：
-
-| 模式 | 桥版本 | 能力 |
-|---|---|---|
-| enhanced | ≥ 9 | 原生能力 + 轮播（定时/切页）+ 淡入 |
-| native | 5–8 | 壁纸、属性、迷你播放器、播放页背景、画质/填充/暗化/位移/缩放 |
-| unsupported | < 5 | 不工作 |
-| missing | 无文件/无入口/无 CSP | 不工作 |
+插件**不写宿主**。`lib/host-bridge.mjs` 只读 `resources/app.asar` 的
+`out/renderer/we-background.js`，确认 `BRIDGE_VERSION >= 5`，不做任何修改。
 
 ## 2. 模块
 
 | 路径 | 职责 |
 |---|---|
 | `plugin.json` | 清单、权限、apiVersion |
-| `index.mjs` | 扫描、路由、状态、设置面板、桥能力判断 |
+| `index.mjs` | 扫描、路由、状态、设置面板 |
 | `lib/host-bridge.mjs` | 只读读取宿主桥版本（不写、不备份） |
 | `lib/asar-lite.cjs` | 自带 asar 读取（无 npm 依赖） |
 | `lib/webwallgl/index.html` | WebWallGL 适配页 |
@@ -79,8 +72,6 @@ Wallpaper Engine 项目
 | `POST /api/bridge-diag` | 宿主桥诊断上报；只在错误时写日志 |
 | `GET /api/bridge-error` | 宿主桥轮询失败上报 |
 
-轮播路由（`/api/playlist*`）只在增强模式被宿主桥调用；原生模式下插件不启动轮播定时器。
-
 ## 4. 状态字段
 
 持久化在插件 settings 的 `state`：
@@ -103,19 +94,7 @@ zoom          50..200（百分比）
 userProps     每张壁纸的属性覆盖值 { [壁纸ID]: { [属性名]: 值 } }
 miniCover     迷你播放器是否使用壁纸背景（默认 true）
 playbackBg    播放页是否使用壁纸背景（默认 true）
-playlist      轮播：enabled / ids / trigger(timer|page) / intervalMin / pageCooldownSec / order / pauseWithPlayer / transition / fadeMs
-playlistCursor  轮播游标
-playlistNextAt  下一次定时切换时间
-playlistLastSwitch 上次切换时间
 ```
-
-### 4.1 轮播（仅增强模式）
-
-- 宿主桥 ≥ 9 时才出现轮播字段并启动定时器；v5 原生模式下 `enabled` 会被强制为 false，
-  数据保留但不自动换图。
-- `timer` 由插件每 15s 检查 `playlistNextAt`；`page` 由桥采样页面签名后
-  `POST /api/playlist/page`。
-- 切换复用 `applyWallpaper(item, { keepPaused: true })`，不另写渲染路径。
 
 ## 5. 渲染桥
 
@@ -144,6 +123,5 @@ playlistLastSwitch 上次切换时间
 
 ## 6. 数据兼容
 
-- 2.4.x 的 `state` 结构保持不变；3.0.0 只停用原生模式下的轮播，不清空 `playlist.ids`。
-- 宿主桥降级到 v5 时，轮播字段自动隐藏；升级回 v9 时字段恢复。
-- `plugin-data` 下的 `bridge-adapt.json` 属于旧版遗留，3.0.0 不再读写。
+- 升级插件不会清空壁纸选择、额外目录与 `userProps`。
+- 宿主桥低于 v5 或缺失时插件只报状态，不修改宿主。
