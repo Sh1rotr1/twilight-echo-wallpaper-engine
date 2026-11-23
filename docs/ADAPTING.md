@@ -46,6 +46,12 @@ node scripts/check-compat.mjs "D:\TwilightEcho"
 
 ## 4. 出现问题时
 
+- **封面/图片全部不显示，控制台报 CSP 拦截**：先跑 `check-compat`，看 `csp.valid` 与
+  `csp.invalid`。常见形态是外部补丁器写出了
+  `http://127.0.0.1:*'self'` 这种非法 source token，导致 `'self'` 一起失效；
+  3.0.2 起检查器会直接报 `主进程 CSP 的 img-src 含非法 source token`，按提示还原官方
+  `app.asar` 或修正补丁器即可。本插件自身不写宿主 CSP。
+
 - **卡片不出现**：先确认桥文件与入口/CSP；再看宿主是否把 `背景与材质` 文案改成别的，
   或新增了同名分类导致锚点挂错（宿主桥逻辑，插件无解）。
 - **有卡片无画面**：确认 3100 端口未被占用；插件日志应有“媒体服务已启动”。

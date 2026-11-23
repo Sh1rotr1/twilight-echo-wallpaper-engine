@@ -62,6 +62,20 @@ function directiveHasOrigin(value) {
   return Boolean(value && (value.includes(ORIGIN) || value.includes('${WALLPAPER_ENGINE_ORIGIN}')))
 }
 
+/**
+ * CSP source-list 合法性。常见写坏形式：
+ *   `http://127.0.0.1:3100 http://127.0.0.1:*'self' data: ...`
+ * 非引号 token 里夹了单引号，浏览器会把 'self' 一起判成非法 source。
+ */
+function invalidCspSources(value) {
+  const text = String(value || '').trim()
+  if (!text) return []
+  const tokens = text.split(/\s+/).filter(Boolean)
+  const bad = tokens.filter((token) => token.includes("'") && !/^'[a-zA-Z-]+'$/.test(token))
+  if (tokens.includes("'none'") && tokens.length > 1) bad.push("'none' 与其他 source 混用")
+  return bad
+}
+
 const compatibility = (() => {
   try { return JSON.parse(fs.readFileSync(path.join(HERE, '..', 'COMPATIBILITY.json'), 'utf8')) }
   catch { return null }
@@ -84,13 +98,23 @@ const frame = pickDirective(main, 'frame-src')
 const img = pickDirective(main, 'img-src')
 const media = pickDirective(main, 'media-src')
 const indexCsp = index.includes(ORIGIN)
+const cspBad = {
+  frame: invalidCspSources(frame),
+  img: invalidCspSources(img),
+  media: invalidCspSources(media)
+}
 const csp = {
   frame,
   img,
   media,
   frameOk: directiveHasOrigin(frame),
   imgOk: directiveHasOrigin(img),
-  mediaOk: directiveHasOrigin(media)
+  mediaOk: directiveHasOrigin(media),
+  frameValid: cspBad.frame.length === 0,
+  imgValid: cspBad.img.length === 0,
+  mediaValid: cspBad.media.length === 0,
+  invalid: cspBad,
+  valid: cspBad.frame.length === 0 && cspBad.img.length === 0 && cspBad.media.length === 0
 }
 
 let assets = []
@@ -122,6 +146,11 @@ if (!indexCsp) issues.push('out/renderer/index.html 未放行 http://127.0.0.1:3
 if (!csp.frameOk) issues.push('主进程 CSP 的 frame-src 未放行 127.0.0.1:3100')
 if (!csp.imgOk) issues.push('主进程 CSP 的 img-src 未放行 127.0.0.1:3100')
 if (!csp.mediaOk) issues.push('主进程 CSP 的 media-src 未放行 127.0.0.1:3100')
+for (const [name, bad] of Object.entries(csp.invalid)) {
+  if (bad.length) {
+    issues.push(`主进程 CSP 的 ${name}-src 含非法 source token：${bad.slice(0, 3).join(' / ')}（外部补丁器写坏的常见形态；还原官方 app.asar 或修正补丁器）`)
+  }
+}
 const warnings = []
 if (!testedMatch) warnings.push(`当前版本 ${appVersion || '?'} 不在 tested 列表（${tested.join(', ') || '空'}），建议人工回归`)
 

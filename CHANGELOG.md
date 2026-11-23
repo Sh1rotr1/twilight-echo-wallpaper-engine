@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.2 — 2026-11-23
+
+- `check-compat` 增加 CSP source-list 合法性检查：识别 `http://127.0.0.1:*'self'`
+  这类由外部补丁器写坏的 token，并报告 `csp.valid=false` / `csp.invalid`。
+- v5 插件自身不写宿主 CSP，不会产生该问题；这项检查用于避免把宿主补丁问题误判成插件故障。
+
 ## 3.0.1 — 2026-11-22
 
 **v5 原生桥适配：不修改 Twilight Echo 本体。**

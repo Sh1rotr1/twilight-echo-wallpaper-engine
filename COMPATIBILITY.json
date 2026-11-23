@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "plugin": {
     "id": "com.twilightecho.tool.wallpaper-engine",
-    "version": "3.0.1",
+    "version": "3.0.2",
     "apiVersion": 3,
     "engines": ">=2.0.0",
     "permissions": [
@@ -119,6 +119,7 @@
     "main frame/img/media CSP contains 127.0.0.1:3100",
     "SettingsPage assets contain 背景与材质",
     "CSS contains .app-background-layer/.settings-overlay-root/te-settings-surface",
-    "bridge BRIDGE_VERSION >= 5"
+    "bridge BRIDGE_VERSION >= 5",
+    "main CSP directives contain no invalid source tokens"
   ]
 }
